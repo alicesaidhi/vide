@@ -9,6 +9,10 @@ local r = require(script.Parent.roblox_types)
 
 local ctor_cache = {} :: { [string]: () -> Instance }
 
+local function snake_case_to_pascal(str: string)
+    return (string.gsub(string.gsub(str, "^(.)", string.upper), "_(.)", string.upper))
+end
+
 setmetatable(ctor_cache :: any, {
     __index = function(self, class)
         local ok, instance: Instance = pcall(Instance.new, class :: any)
@@ -44,7 +48,7 @@ end
 
 local function create(class_or_instance: string|Instance): (Props) -> Instance
     if type(class_or_instance) == "string" then
-        return create_instance(class_or_instance)
+        return create_instance(snake_case_to_pascal(class_or_instance))
     elseif typeof(class_or_instance) == "Instance" then
         return clone_instance(class_or_instance)
     else

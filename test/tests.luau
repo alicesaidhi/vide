@@ -939,10 +939,10 @@ TEST("create()", wrap_root(function()
 
         local f = create "Frame" (to_apply)
 
-        CHECK((f :: any).a == 1)
+        CHECK((f :: any).A == 1)
         CHECK((f :: any).test == true )
 
-        CHECK((f2 :: any).a == 2)
+        CHECK((f2 :: any).A == 2)
     end
 
     do CASE "nested children effect"

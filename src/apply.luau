@@ -63,6 +63,10 @@ local function return_caches(caches: typeof(free_caches) )
     free_caches = caches
 end
 
+local function snake_case_to_pascal(str: string)
+    return (string.gsub(string.gsub(str, "^(.)", string.upper), "_(.)", string.upper))
+end
+
 -- map of datatype names to class default constructor for aggregate init
 local aggregates = {}
 for name, class in {
@@ -98,9 +102,10 @@ local function apply<T>(instance: T & Instance, properties: { [unknown]: unknown
     local depth = 1
     repeat
         for property, value in properties do
-            if property == "Parent" then continue end
+            if property == "parent" then continue end
 
             if type(property) == "string" then
+                property = snake_case_to_pascal(property)
                 if strict then -- check for duplicate prop assignment at nesting depth
                     if nested_debug[depth][property] then
                         throw(`duplicate property {property} at depth {depth}`)

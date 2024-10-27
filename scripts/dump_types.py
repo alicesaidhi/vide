@@ -1,4 +1,5 @@
 import requests
+import re
 
 enable_formatting = True
 new_line = ";"
@@ -71,8 +72,8 @@ lines_before = [
 	"type p<T> ="+space+"T?|()->T",
 	"type e<T=()->()> ="+space+"T?",
 	"type a={priority:"+space+"number,"+space+"callback:"+space+"(Instance)"+space+"->"+space+"()}",
-	"type recursive<T> =T|{recursive<T>}"
-	"type c<T> =a|T|Recursive<Instance>|()->Recursive<Instance>",
+	"type recursive<T> =T|{recursive<T>}",
+	"type c<T> =a|T|recursive<Instance>|()->recursive<Instance>",
 	"type ContentId = string", # temporary
 	"type Dictionary = {[string]: any}",
 	"type Array = {any}"
@@ -136,6 +137,11 @@ def get_prop_type(value_type):
 
 	return prop
 
+pattern = re.compile(r'(?<!^)(?=[A-Z])')
+def pascal_to_snake_case(name):
+	name = pattern.sub("_", name).lower()
+	return name
+
 def append_class(roblox_class):
 	#lines.append("\t-- " + roblox_class["Name"])
 	correction_class = map_corrections.get(roblox_class["Name"]) or {"Members": []}
@@ -154,8 +160,8 @@ def append_class(roblox_class):
 			if member["Security"]["Write"] != "None": continue
 			
 			if "Deprecated" in member: continue
-
-			lines.append(indent+member["Name"] + ":"+space+"p<" + get_prop_type(member["ValueType"]) + ">"+next_entry)
+			name = pascal_to_snake_case(member["Name"])
+			lines.append(indent+name + ":"+space+"p<" + get_prop_type(member["ValueType"]) + ">"+next_entry)
 		elif member["MemberType"] == "Event":
 			if member["Security"] != "None": continue
 
@@ -163,9 +169,11 @@ def append_class(roblox_class):
 
 			correction_parameters_map = {}
 			for parameter in correction_member["Parameters"]:
-				correction_parameters_map[parameter["Name"]] = parameter
+				name = pascal_to_snake_case(parameter["Name"])
+				correction_parameters_map[name] = parameter
 
-			line = indent+member["Name"] + ":"+space+"e<("
+			name = pascal_to_snake_case(member["Name"])
+			line = indent+name + ":"+space+"e<("
 			is_first = True
 			for parameter in member["Parameters"]:
 
