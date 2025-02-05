@@ -2,6 +2,7 @@
     "compilerOptions": {
         "isolatedModules": true,
         "jsx": "preserve",
-        "jsxImportSource": "vue"
+        "jsxImportSource": "vue",
+        "lib": ["DOM", "ES2015"],
     }
 }

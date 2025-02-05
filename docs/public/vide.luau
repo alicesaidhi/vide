@@ -1,0 +1,2146 @@
+local vide
+do
+local a
+
+a = {
+    cache = {},
+    load = function(b)
+        if not a.cache[b] then
+            a.cache[b] = {
+                c = a[b](),
+            }
+        end
+
+        return a.cache[b].c
+    end,
+}
+
+do
+    function a.a()
+        local function inline_test(): string
+            return debug.info(1, 'n')
+        end
+
+        local b = inline_test() ~= 'inline_test'
+
+        return {
+            strict = not b,
+            batch = false,
+            defer_nested_properties = true,
+        }
+    end
+    function a.b()
+        local b = a.load'a'
+
+        export type SourceNode<T> = {cache: T, [number]: Node<T>}
+        export type Node<T> = {cache: T, effect: ((T) -> T) | false, cleanups: {() -> ()} | false, context: {[number]: unknown} | false, owned: {Node<T>} | false, owner: Node<T> | false, parents: {SourceNode<T>}, [number]: Node<T>}
+
+        local c = {n = 0}::{[number]: Node<any>, n: number}
+
+        local function efn(d: string)
+            local e = debug.traceback(d, 2)
+
+            if string.find(d, '^effect error stacktrace') then
+                e = string.gsub('    ' .. e, '\n', function()
+                    return '\n    '
+                end)
+            end
+
+            e ..= '\nsource update stacktrace:'
+
+            return e
+        end
+        local function ycall<T, U>(d: (T) -> U, e: T): (boolean,string | U)
+            local g = coroutine.create(xpcall)
+            local h, i, j = coroutine.resume(g, d, efn, e)
+
+            assert(h)
+
+            if coroutine.status(g) ~= 'dead' then
+                return false, debug.traceback(g, 'attempt to yield in reactive scope')
+            end
+
+            return i, j
+        end
+        local function get_scope(): Node<unknown>?
+            return c[c.n]
+        end
+        local function assert_stable_scope(): Node<unknown>
+            local d = get_scope()
+
+            if not d then
+                local e = debug.info(2, 'n')
+
+                return error(`cannot use {e}() outside a stable or reactive scope`, 0)
+            elseif d.effect then
+                error(
+[[cannot create a new reactive scope inside another reactive scope]], 0)
+            end
+
+            return d
+        end
+        local function push_child<T>(d: SourceNode<any>, e: Node<any>)
+            table.insert(d, e)
+            table.insert(e.parents, d)
+        end
+        local function push_scope<T>(d: Node<T>)
+            local e = c.n + 1
+
+            c.n = e
+            c[e] = d
+        end
+        local function pop_scope()
+            local d = c.n
+
+            c.n = d - 1
+            c[d] = nil
+        end
+        local function push_cleanup<T>(d: Node<T>, e: () -> ())
+            if d.cleanups then
+                table.insert(d.cleanups, e)
+            else
+                d.cleanups = {e}
+            end
+        end
+        local function flush_cleanups<T>(d: Node<T>)
+            if d.cleanups then
+                for e, g in next, d.cleanups do
+                    local h, i: string? = xpcall(g, debug.traceback)
+
+                    if not h then
+                        error(`cleanup error: {i}`, 0)
+                    end
+                end
+
+                table.clear(d.cleanups)
+            end
+        end
+        local function find_and_swap_pop<T>(d: {T}, e: T)
+            local g = table.find(d, e)::number
+            local h = #d
+
+            d[g] = d[h]
+            d[h] = nil
+        end
+        local function unparent<T>(d: Node<T>)
+            local e = d.parents
+
+            for g, h in e do
+                find_and_swap_pop(h, d)
+
+                e[g] = nil
+            end
+        end
+        local function destroy<T>(d: Node<T>)
+            if b.strict and table.find(c, d) then
+                error('attempt to destroy an active scope', 0)
+            end
+
+            flush_cleanups(d)
+            unparent(d)
+
+            if d.owner then
+                find_and_swap_pop(d.owner.owned::{Node<T>}, d)
+
+                d.owner = false
+            end
+            if d.owned then
+                local e = d.owned
+
+                while e[1] do
+                    destroy(e[1])
+                end
+            end
+        end
+        local function destroy_owned<T>(d: Node<T>)
+            if d.owned then
+                local e = d.owned
+
+                while e[1] do
+                    destroy(e[1])
+                end
+            end
+        end
+
+        local d = {n = 0}::{n: number, [number]: Node<any>}
+
+        local function evaluate_node<T>(e: Node<T>)
+            if b.strict then
+                local g = e.cache
+
+                for h = 1, 2 do
+                    local i = e.cache
+
+                    flush_cleanups(e)
+                    destroy_owned(e)
+                    push_scope(e)
+
+                    local j, k = ycall(e.effect::(T) -> T, i)
+
+                    pop_scope()
+
+                    if not j then
+                        table.clear(d)
+
+                        d.n = 0
+
+                        error(`effect error stacktrace\n{k::string}`, 0)
+                    end
+
+                    e.cache = k::T
+                end
+
+                return g ~= e.cache
+            else
+                local g = e.cache
+
+                flush_cleanups(e)
+                destroy_owned(e)
+                push_scope(e)
+
+                local h, i = pcall(e.effect::(T) -> T, e.cache)
+
+                pop_scope()
+
+                if not h then
+                    table.clear(d)
+
+                    d.n = 0
+
+                    error(`effect error:\n{i}\n`, 0)
+                end
+
+                e.cache = i
+
+                return g ~= i
+            end
+        end
+        local function queue_children_for_update<T>(e: SourceNode<T>)
+            local g = d.n
+
+            while e[1] do
+                g += 1
+
+                d[g] = e[1]
+
+                unparent(e[1])
+            end
+
+            d.n = g
+        end
+        local function get_update_queue_length()
+            return d.n
+        end
+        local function flush_update_queue(e: number)
+            local g = e + 1
+
+            while g <= d.n do
+                local h = d[g]
+
+                if h.owner and evaluate_node(h) then
+                    queue_children_for_update(h)
+                end
+
+                d[g] = false::any
+
+                g += 1
+            end
+
+            d.n = e
+        end
+        local function update_descendants<T>(e: SourceNode<T>)
+            local g = d.n
+
+            queue_children_for_update(e)
+
+            if b.batch then
+                return
+            end
+
+            local h = g + 1
+
+            while h <= d.n do
+                local i = d[h]
+
+                if i.owner and evaluate_node(i) then
+                    queue_children_for_update(i)
+                end
+
+                d[h] = false::any
+
+                h += 1
+            end
+
+            d.n = g
+        end
+        local function push_child_to_scope<T>(e: SourceNode<T>)
+            local g = get_scope()
+
+            if g and g.effect then
+                push_child(e, g)
+            end
+        end
+        local function create_node<T>(e: false | Node<any>, g: false | ((T) -> T), h: T): Node<T>
+            local i: Node<T> = {
+                cache = h,
+                effect = g,
+                cleanups = false,
+                context = false,
+                owner = e,
+                owned = false,
+                parents = {},
+            }
+
+            if e then
+                if e.owned then
+                    table.insert(e.owned, i)
+                else
+                    e.owned = {i}
+                end
+            end
+
+            return i
+        end
+        local function create_source_node<T>(e: T): SourceNode<T>
+            return {cache = e}
+        end
+        local function get_children<T>(e: Node<T>): {Node<unknown>}
+            return {
+                unpack(e),
+            }::{Node<any>}
+        end
+        local function set_context<T>(e: Node<T>, g: number, h: unknown)
+            if e.context then
+                e.context[g] = h
+            else
+                e.context = {[g] = h}
+            end
+        end
+
+        return table.freeze{
+            push_scope = push_scope,
+            pop_scope = pop_scope,
+            evaluate_node = evaluate_node,
+            get_scope = get_scope,
+            assert_stable_scope = assert_stable_scope,
+            push_cleanup = push_cleanup,
+            destroy = destroy,
+            flush_cleanups = flush_cleanups,
+            push_child_to_scope = push_child_to_scope,
+            update_descendants = update_descendants,
+            push_child = push_child,
+            create_node = create_node,
+            create_source_node = create_source_node,
+            get_children = get_children,
+            flush_update_queue = flush_update_queue,
+            get_update_queue_length = get_update_queue_length,
+            set_context = set_context,
+            scopes = c,
+            q = d,
+        }
+    end
+    function a.c()
+        local b = a.load'b'
+
+        type Node<T> = b.Node<T>
+
+        local c = b.create_node
+        local d = b.push_scope
+        local e = b.pop_scope
+        local g = b.destroy
+        local h = {}
+
+        local function root<T...>(i: (destroy:() -> ()) -> T...): (() -> (),T...)
+            local j = c(false, false, false)
+
+            h[j] = true
+
+            local k = function()
+                if not h[j] then
+                    error'root already destroyed'
+                end
+
+                h[j] = nil
+
+                g(j)
+            end
+
+            d(j)
+
+            local l = {
+                xpcall(i, debug.traceback, k),
+            }
+
+            e()
+
+            if not l[1] then
+                k()
+                error(`error while running root():\n\n{l[2]}`, 0)
+            end
+
+            return k, unpack(l::any, 2)
+        end
+
+        return root::<T...>(fn:(destroy:() -> ()) -> T...) -> (() -> (),T...)
+    end
+    function a.d()
+        local b = {}::any
+
+        do
+            b.__index = b
+            b.__type = 'RBXScriptSignal'
+
+            local function new_connection(c, d)
+                return {
+                    signal = c,
+                    fn = d,
+                    Disconnect = function(e)
+                        local g = table.find(c.connections, e)
+
+                        if not g then
+                            return
+                        end
+
+                        table.remove(c.connections, g)
+                    end,
+                }
+            end
+
+            function b.new()
+                return setmetatable({connections = {}}, b)
+            end
+            function b.Connect(c, d)
+                local e = new_connection(c, d)
+
+                table.insert(c.connections, e)
+
+                return e
+            end
+            function b.fire(c, ...)
+                for d = #c.connections, 1, -1 do
+                    c.connections[d].fn(...)
+                end
+            end
+        end
+
+        local c = {}::any
+
+        do
+            type userdata = {__USERDATA: true}
+            type ProxyMT = {proxy: userdata, data: Data, __index: any, __newindex: any}
+            type Data = {name: string, parent: Data?, children: {Data}, changed: {[string]: RBXScriptSignal}, properties: {[string]: unknown}, destroying: RBXScriptSignal, class: string, type: 'Instance'}
+
+            local function deep_clone<T>(d: T&{}): T
+                local e = table.clone(d::{})::{}
+
+                for g, h in next, e do
+                    if type(h) == 'table' then
+                        e[g] = deep_clone(h)
+                    end
+                end
+
+                return e::T&{}
+            end
+
+            local d = {}::{[Data]: userdata?}
+
+            setmetatable(d::any, {
+                __mode = 'v',
+            })
+
+            local function get_data(e: userdata): Data
+                local function f(g: userdata): ProxyMT
+                    return getmetatable(g::any)
+                end
+
+                return f(e).data
+            end
+            local function is_instance(e: unknown): boolean
+                local g = getmetatable(e::any)
+
+                return g and g.data and g.data.type == 'Instance'
+            end
+
+            local e = {}
+
+            local function __index(g: userdata, h: string): ()
+                local i = get_data(g)
+
+                return if e[h]
+                    then e[h]
+                    elseif h == 'Name'
+                    then i.name
+                    elseif h == 'Parent'
+                    then i.parent
+                    elseif h == 'Destroying'
+                    then i.destroying
+                    else i.properties[h]
+            end
+            local function __newindex(g: userdata, h: string, i: unknown)
+                local j = get_data(g)
+
+                if h == 'Name' then
+                    if type(i) ~= 'string' then
+                        error('name must be a string', 2)
+                    end
+
+                    j.name = i::string
+                elseif h == 'Parent' then
+                    assert(i == nil or is_instance(i), 'attempt to set non-instance as parent')
+
+                    local k = j.parent
+
+                    if k then
+                        j.parent = nil
+
+                        table.remove(k.children, table.find(k.children, j))
+                    end
+                    if i then
+                        j.parent = get_data(i::userdata)
+
+                        table.insert(get_data(i::userdata).children, j)
+                    end
+                else
+                    j.properties[h] = i
+                end
+                if j.changed[h] then
+                    b.fire(j.changed[h])
+                end
+            end
+            local function get_proxy(g: Data): userdata
+                return d[g] or (function()
+                    local h = newproxy(true)
+                    local i = getmetatable(h)
+
+                    i.proxy = h
+                    i.data = g
+                    i.__index = __index
+                    i.__newindex = __newindex
+                    d[g] = h
+
+                    return h
+                end)()
+            end
+
+            function c.new(g: string): Instance
+                local h = {
+                    name = 'UNNAMED',
+                    parent = nil,
+                    children = {},
+                    changed = {},
+                    properties = {},
+                    class = g,
+                    destroying = b.new()::any,
+                    type = 'Instance'::'Instance',
+                }
+
+                return get_proxy(h)::any
+            end
+            function c.is_instance(g: unknown): boolean
+                return is_instance(g)
+            end
+            function e.Clone(g: userdata): userdata
+                local h = get_data(g)
+                local i = (c.new''::any)::userdata
+                local j = get_data(i)
+
+                for k, l in next, deep_clone(h)do
+                    j[k] = l
+                end
+
+                return i
+            end
+            function e.FindFirstChild(g: userdata, h: string): userdata?
+                local i = get_data(g)
+
+                for j, k in i.children do
+                    if k.name == h then
+                        return get_proxy(k)
+                    end
+                end
+
+                return nil
+            end
+            function e.GetChildren(g: userdata): {userdata}
+                local h = get_data(g).children
+                local i = table.create(#h)
+
+                for j, k in next, h do
+                    i[j] = get_proxy(k)
+                end
+
+                return i
+            end
+            function e.GetPropertyChangedSignal(g: userdata, h: string): RBXScriptSignal
+                local i = get_data(g)
+
+                if not i.changed[h] then
+                    i.changed[h] = b.new()::any
+                end
+
+                return i.changed[h]
+            end
+            function e.Destroy(g: userdata)
+                local h = get_data(g)
+
+                b.fire(h.destroying)
+
+                h.parent = nil
+
+                if h.changed.Parent then
+                    b.fire(h.changed.Parent)
+                end
+            end
+        end
+
+        local function table_to_proxy(d: any)
+            local e = newproxy(true)
+            local g = getmetatable(e)
+
+            for h, i in getmetatable(d)do
+                g[h] = i
+            end
+
+            function g.__index(h, i)
+                return d[i]
+            end
+            function g.__newindex(h, i, j)
+                d[i] = j
+            end
+
+            return e
+        end
+
+        local d = {
+            __type = 'Color3',
+        }::any
+
+        do
+            function d.new(e, g, h)
+                return table_to_proxy(setmetatable({
+                    r = e,
+                    g = g,
+                    b = h,
+                }, d))
+            end
+            function d.__eq(e, g)
+                return e.r == g.r and e.g == g.g and e.b == g.b
+            end
+        end
+
+        local e = {
+            __type = 'Vector2',
+        }::any
+
+        do
+            function e.new(g, h)
+                return table_to_proxy(setmetatable({
+                    x = g,
+                    y = h,
+                }, e))
+            end
+            function e.__eq(g, h)
+                return g.x == h.x and g.y == h.y
+            end
+        end
+
+        local g = {
+            __type = 'UDim2',
+        }::any
+
+        do
+            function g.new(h, i, j, k)
+                return table_to_proxy(setmetatable({
+                    x = {
+                        scale = h,
+                        offset = i,
+                    },
+                    y = {
+                        scale = j,
+                        offset = k,
+                    },
+                }, g))
+            end
+            function g.fromScale(h, i)
+                return table_to_proxy(setmetatable({
+                    x = {
+                        scale = h,
+                        offset = 0,
+                    },
+                    y = {
+                        scale = i,
+                        offset = 0,
+                    },
+                }, g))
+            end
+            function g.__eq(h, i)
+                return h.x.scale == i.x.scale and i.x.offset == i.x.offset and h.y.scale == i.y.scale and h.y.offset == i.y.offset
+            end
+        end
+
+        local h = {}::any
+
+        do
+            setmetatable(h, {
+                __index = function(i, j)
+                    local k = setmetatable({}, {
+                        __index = function(k, l)
+                            k[l] = true
+
+                            return true
+                        end,
+                    })
+
+                    i[j] = k
+
+                    return k
+                end,
+            })
+        end
+
+        local i = function(i)
+            return if c.is_instance(i)
+                then'Instance'
+                elseif getmetatable(i) and getmetatable(i).__type
+                then getmetatable(i).__type
+                else type(i)
+        end::any
+
+        return {
+            Signal = b,
+            Instance = c::typeof(c),
+            Color3 = d::typeof(d),
+            Vector2 = e::typeof(e),
+            UDim2 = g::typeof(g),
+            Enum = h::typeof(h),
+            typeof = i::typeof(i),
+        }
+    end
+    function a.e()
+        local b = a.load'b'
+
+        type Node<T> = b.Node<T>
+
+        local c = b.create_node
+        local d = b.assert_stable_scope
+        local e = b.get_scope
+        local g = b.evaluate_node
+        local h = b.push_cleanup
+
+        local function update_property_effect(i: {instance: Instance, property: string, source: () -> unknown})
+            (i.instance::any)[i.property] = i.source()
+
+            return i
+        end
+        local function update_parent_effect(i: {instance: Instance, source: () -> Instance})
+            i.instance.Parent = i.source()
+
+            return i
+        end
+        local function update_children_effect(i: {instance: Instance, cur_children_set: {[Instance]: true}, new_children_set: {[Instance]: true}, source: () -> Instance | {Instance}})
+            local j: {[Instance]: true} = i.cur_children_set
+            local k: {[Instance]: true} = i.new_children_set
+            local l = i.source()
+
+            local function process_child(m: Instance | {Instance})
+                if type(m) == 'userdata' then
+                    if k[m] then
+                        return
+                    end
+
+                    k[m] = true
+
+                    if not j[m] then
+                        m.Parent = i.instance
+                    else
+                        j[m] = nil
+                    end
+                elseif type(m) == 'table' then
+                    for n, o in next, m do
+                        process_child(o)
+                    end
+                elseif type(m) == 'function' then
+                    local n = c(assert(e()), update_children_effect, {
+                        instance = i.instance,
+                        cur_children_set = {},
+                        new_children_set = {},
+                        source = m,
+                    })
+
+                    g(n)
+                    h(assert(e()), function()
+                        for o in n.cache.cur_children_set do
+                            o.Parent = nil
+                        end
+                    end)
+                end
+            end
+
+            process_child(l)
+
+            for m in next, j do
+                m.Parent = nil
+            end
+
+            table.clear(j)
+
+            i.cur_children_set, i.new_children_set = k, j
+
+            return i
+        end
+
+        return {
+            property = function(i, j, k)
+                local l = c(d(), update_property_effect, {
+                    instance = i,
+                    property = j,
+                    source = k,
+                })
+
+                g(l)
+
+                return l
+            end,
+            parent = function(i, j)
+                local k = c(d(), update_parent_effect, {
+                    instance = i,
+                    source = j,
+                })
+
+                g(k)
+
+                return k
+            end,
+            children = function(i, j)
+                local k = c(d(), update_children_effect, {
+                    instance = i,
+                    cur_children_set = {},
+                    new_children_set = {},
+                    source = j,
+                })
+
+                g(k)
+                h(d(), function()
+                    for l in k.cache.cur_children_set do
+                        l.Parent = nil
+                    end
+                end)
+
+                return k
+            end,
+        }
+    end
+    function a.f()
+        type Action = {priority: number, callback: (Instance) -> ()}
+
+        local b = table.freeze{}
+
+        local function is_action(c: any)
+            return getmetatable(c) == b
+        end
+        local function action(c: (Instance) -> (), d: number?): Action
+            local e = {
+                priority = d or 1,
+                callback = c,
+            }
+
+            setmetatable(e::any, b)
+
+            return table.freeze(e)
+        end
+
+        return function()
+            return action, is_action
+        end
+    end
+    function a.g()
+        local b = game and typeof or a.load'd'.typeof::never
+        local c = a.load'a'
+        local d = a.load'e'
+        local e, g = a.load'f'()
+        local h = a.load'b'
+
+        type Node<T> = h.Node<T>
+        type Array<V> = {V}
+        type ArrayOrV<V> = {ArrayOrV<V>} | V
+        type Map<K, V> = {[K]: V}
+        type Cache = {events: Array<string | (() -> ())>, actions: Map<number, Array<(Instance) -> ()>>, nested_debug: Map<number, Map<string, true>>, nested_stack: {{} | number}}
+
+        local i: Cache?
+
+        local function borrow_cache(): Cache
+            if i then
+                local j = i
+
+                i = nil
+
+                return j
+            else
+                return {
+                    events = {},
+                    actions = setmetatable({}::any, {
+                        __index = function(j, k)
+                            j[k] = {}
+
+                            return j[k]
+                        end,
+                    }),
+                    nested_debug = setmetatable({}::any, {
+                        __index = function(j, k: number)
+                            j[k] = {}
+
+                            return j[k]
+                        end,
+                    }),
+                    nested_stack = {},
+                }
+            end
+        end
+        local function return_cache(j: Cache)
+            i = j
+        end
+        local function process_properties(
+            j: Map<unknown, unknown>,
+            k: Instance,
+            l: Cache,
+            m: number
+        )
+            for n, o in j do
+                if n == 'Parent' then
+                    continue
+                end
+                if type(n) == 'string' then
+                    if c.strict then
+                        if l.nested_debug[m][n] then
+                            error(`duplicate property {n} at depth {m}`, 0)
+                        end
+
+                        l.nested_debug[m][n] = true
+                    end
+                    if type(o) == 'function' then
+                        if k[n] and typeof(k[n]) == "RBXScriptSignal" then
+                            table.insert(l.events, n)
+                            table.insert(l.events, o::() -> ())
+                        else
+                            d.property(k, n, o::() -> ())
+                        end
+                    else
+                        (k::any)[n] = o
+                    end
+                elseif type(n) == 'number' then
+                    if type(o) == 'function' then
+                        d.children(k, o::() -> ArrayOrV<Instance>)
+                    elseif type(o) == 'table' then
+                        if g(o) then
+                            table.insert(l.actions[(o::any).priority], (o::any).callback::() -> ())
+                        elseif c.defer_nested_properties then
+                            table.insert(l.nested_stack, o::{})
+                            table.insert(l.nested_stack, m + 1)
+                        else
+                            process_properties(o::Map<unknown, unknown>, k, l, m + 1)
+                        end
+                    elseif type(o) == 'userdata' then
+                        (o::Instance).Parent = k
+                    end
+                end
+            end
+        end
+        local function apply<T>(j: T&Instance, k: {[unknown]: unknown}): T
+            if not k then
+                error
+[[attempt to call a constructor returned by create() with no properties]]
+            end
+
+            local l: unknown = k.Parent
+            local m = borrow_cache()
+            local n = m.events
+            local o = m.actions
+            local p = m.nested_debug
+            local q = m.nested_stack
+            local r = 1
+
+            repeat
+                process_properties(k, j, m, r)
+
+                r = table.remove(q)::number
+                k = table.remove(q)::{}
+            until not k
+
+            for s = 1, #n, 2 do
+                local t = n[s]
+                local u = n[s + 1];
+
+                (j::any)[t]:Connect(u)
+            end
+
+            for s, t in next, o do
+                for u, v in next, t do
+                    v(j)
+                end
+            end
+
+            if l then
+                if type(l) == 'function' then
+                    d.parent(j, l::() -> Instance)
+                else
+                    j.Parent = l::Instance
+                end
+            end
+
+            table.clear(n)
+
+            for s, t in next, o do
+                table.clear(t)
+            end
+
+            if c.strict then
+                table.clear(p)
+            end
+
+            table.clear(q)
+            return_cache(m)
+
+            return j
+        end
+
+        return apply
+    end
+    function a.h()
+        local b = a.load'c'
+        local c = a.load'g'
+
+        local function mount<T>(d: () -> T, e: Instance?): () -> ()
+            return b(function()
+                local g = d()
+
+                if e then
+                    c(e, {g})
+                end
+            end)
+        end
+
+        return mount::(<T>(component:() -> T, target:Instance) -> () -> ())&((component:() -> ()) -> () -> ())
+    end
+    function a.i()
+        local b = game and Enum or a.load'd'.Enum::never
+        local c = game and Color3 or a.load'd'.Color3::never
+
+        return {
+            -- Part = {
+            --     Material = b.Material.SmoothPlastic,
+            --     Size = vector.create(1, 1, 1),
+            --     Anchored = true,
+            -- },
+            -- BillboardGui = {
+            --     ResetOnSpawn = false,
+            --     ZIndexBehavior = b.ZIndexBehavior.Sibling,
+            -- },
+            -- CanvasGroup = nil,
+            -- Frame = {
+            --     BackgroundColor3 = c.new(1, 1, 1),
+            --     BorderColor3 = c.new(0, 0, 0),
+            --     BorderSizePixel = 0,
+            -- },
+            -- ImageButton = {
+            --     BackgroundColor3 = c.new(1, 1, 1),
+            --     BorderColor3 = c.new(0, 0, 0),
+            --     BorderSizePixel = 0,
+            --     AutoButtonColor = false,
+            -- },
+            -- ImageLabel = {
+            --     BackgroundColor3 = c.new(1, 1, 1),
+            --     BorderColor3 = c.new(0, 0, 0),
+            --     BorderSizePixel = 0,
+            -- },
+            -- ScreenGui = {
+            --     ResetOnSpawn = false,
+            --     ZIndexBehavior = b.ZIndexBehavior.Sibling,
+            -- },
+            -- ScrollingFrame = {
+            --     BackgroundColor3 = c.new(1, 1, 1),
+            --     BorderColor3 = c.new(0, 0, 0),
+            --     BorderSizePixel = 0,
+            --     ScrollBarImageColor3 = c.new(0, 0, 0),
+            -- },
+            -- SurfaceGui = {
+            --     ResetOnSpawn = false,
+            --     ZIndexBehavior = b.ZIndexBehavior.Sibling,
+            --     PixelsPerStud = 50,
+            --     SizingMode = b.SurfaceGuiSizingMode.PixelsPerStud,
+            -- },
+            -- TextBox = {
+            --     BackgroundColor3 = c.new(1, 1, 1),
+            --     BorderColor3 = c.new(0, 0, 0),
+            --     BorderSizePixel = 0,
+            --     ClearTextOnFocus = false,
+            --     Font = b.Font.SourceSans,
+            --     Text = '',
+            --     TextColor3 = c.new(0, 0, 0),
+            -- },
+            -- TextButton = {
+            --     BackgroundColor3 = c.new(1, 1, 1),
+            --     BorderColor3 = c.new(0, 0, 0),
+            --     BorderSizePixel = 0,
+            --     AutoButtonColor = false,
+            --     Font = b.Font.SourceSans,
+            --     Text = '',
+            --     TextColor3 = c.new(0, 0, 0),
+            -- },
+            -- TextLabel = {
+            --     BackgroundColor3 = c.new(1, 1, 1),
+            --     BorderColor3 = c.new(0, 0, 0),
+            --     BorderSizePixel = 0,
+            --     Font = b.Font.SourceSans,
+            --     Text = '',
+            --     TextColor3 = c.new(0, 0, 0),
+            -- },
+            -- UIListLayout = {
+            --     SortOrder = b.SortOrder.LayoutOrder,
+            -- },
+            -- UIGridLayout = {
+            --     SortOrder = b.SortOrder.LayoutOrder,
+            -- },
+            -- UITableLayout = {
+            --     SortOrder = b.SortOrder.LayoutOrder,
+            -- },
+            -- UIPageLayout = {
+            --     SortOrder = b.SortOrder.LayoutOrder,
+            -- },
+            -- VideoFrame = {
+            --     BackgroundColor3 = c.new(1, 1, 1),
+            --     BorderColor3 = c.new(0, 0, 0),
+            --     BorderSizePixel = 0,
+            -- },
+            -- ViewportFrame = {
+            --     BackgroundColor3 = c.new(1, 1, 1),
+            --     BorderColor3 = c.new(0, 0, 0),
+            --     BorderSizePixel = 0,
+            -- },
+        }
+    end
+    function a.j()
+        local b = typeof or a.load'd'.typeof::never
+        local c = Instance or a.load'd'.Instance::never
+        local d = a.load'i'
+        local e = a.load'g'
+        local g = {}::{[string]: () -> Instance}
+
+        setmetatable(g::any, {
+            __index = function(h, i)
+                local j, k: Instance = pcall(c.new, i::any)
+
+                if not j then
+                    error(`invalid class name, could not create instance of class {i}`, 0)
+                end
+
+                local l: {[string]: unknown}? = d[i]
+
+                if l then
+                    for m, n in next, l do
+                        (k::any)[m] = n
+                    end
+                end
+
+                local function ctor(m: Props): Instance
+                    return e(k:Clone(), m)
+                end
+
+                h[i] = ctor
+
+                return ctor
+            end,
+        })
+
+        local function create_instance(h: string)
+            return g[h]
+        end
+        local function clone_instance(h: Instance)
+            return function(i: Props): Instance
+                local j = h:Clone()
+
+                if not j then
+                    error'attempt to clone a non-archivable instance'
+                end
+
+                return e(j, i)
+            end
+        end
+        local function create(h: string | Instance, i: Props?): ((Props) -> Instance) | Instance
+            local j: (Props) -> Instance
+
+            if type(h) == 'string' then
+                j = create_instance(h)
+            elseif b(h) == 'Instance' then
+                j = clone_instance(h)
+            else
+                error('bad argument #1, expected string or instance, got ' .. b(h), 0)
+
+                return nil::never
+            end
+            if i then
+                return j(i)
+            end
+
+            return j
+        end
+
+        type Props = {[any]: any}
+        type Create<Name, Instance> = ((Name, Props) -> Instance)&((Name) -> (Props) -> Instance)
+
+        return (create::any)::&(<T>(T&Instance) -> (Props) -> T)&(<T>(T&Instance, Props) -> T)&Create<'Folder', Folder>&Create<'BillboardGui', BillboardGui>&Create<'CanvasGroup', CanvasGroup>&Create<'Frame', Frame>&Create<'ImageButton', ImageButton>&Create<'ImageLabel', ImageLabel>&Create<'ScreenGui', ScreenGui>&Create<'ScrollingFrame', ScrollingFrame>&Create<'SurfaceGui', SurfaceGui>&Create<'TextBox', TextBox>&Create<'TextButton', TextButton>&Create<'TextLabel', TextLabel>&Create<'UIAspectRatioConstraint', UIAspectRatioConstraint>&Create<'UICorner', UICorner>&Create<'UIGradient', UIGradient>&Create<'UIGridLayout', UIGridLayout>&Create<'UIListLayout', UIListLayout>&Create<'UIPadding', UIPadding>&Create<'UIPageLayout', UIPageLayout>&Create<'UIScale', UIScale>&Create<'UISizeConstraint', UISizeConstraint>&Create<'UIStroke', UIStroke>&Create<'UITableLayout', UITableLayout>&Create<'UITextSizeConstraint', UITextSizeConstraint>&Create<'VideoFrame', VideoFrame>&Create<'ViewportFrame', ViewportFrame>&Create<string, Instance>
+    end
+    function a.k()
+        local b = a.load'b'
+
+        type Node<T> = b.Node<T>
+
+        local c = b.create_source_node
+        local d = b.push_child_to_scope
+        local e = b.update_descendants
+
+        export type Source<T> = (() -> T)&((value:T) -> T)
+
+        local function source<T>(g: T): Source<T>
+            local h = c(g)
+
+            local function update_source(...): T
+                if select('#', ...) == 0 then
+                    d(h)
+
+                    return h.cache
+                end
+
+                local i = ...::T
+
+                if h.cache == i and (type(i) ~= 'table' or table.isfrozen(i)) then
+                    return i
+                end
+
+                h.cache = i
+
+                e(h)
+
+                return i
+            end
+
+            return update_source
+        end
+
+        return source::(<T>(initial_value:T) -> Source<T>)&(<T>() -> Source<T>)
+    end
+    function a.l()
+        local b = a.load'b'
+        local c = b.create_node
+        local d = b.assert_stable_scope
+        local e = b.evaluate_node
+
+        local function effect<T>(g: (T) -> T, h: T)
+            local i = c(d(), g, h)
+
+            e(i)
+        end
+
+        return effect::(<T>(callback:(T) -> T, initial_value:T) -> ())&((callback:() -> ()) -> ())
+    end
+    function a.m()
+        local b = a.load'b'
+        local c = b.create_node
+        local d = b.push_child_to_scope
+        local e = b.assert_stable_scope
+        local g = b.evaluate_node
+
+        local function derive<T>(h: () -> T): () -> T
+            local i = c(e(), h, false::any)
+
+            g(i)
+
+            return function()
+                d(i)
+
+                return i.cache
+            end
+        end
+
+        return derive
+    end
+    function a.n()
+        local b = game and typeof or a.load'd'.typeof::never
+        local c = a.load'b'
+        local d = c.get_scope
+        local e = c.push_cleanup
+
+        local function helper(g: any)
+            return if b(g) == 'RBXScriptConnection'
+                then function()
+                    g:Disconnect()
+                end
+                elseif type(g) == 'thread'
+                then function()
+                    task.cancel(g)
+                end
+                elseif b(g) == 'Instance'
+                then function()
+                    g:Destroy()
+                end
+                elseif g.destroy
+                then function()
+                    g:destroy()
+                end
+                elseif g.disconnect
+                then function()
+                    g:disconnect()
+                end
+                elseif g.Destroy
+                then function()
+                    g:Destroy()
+                end
+                elseif g.Disconnect
+                then function()
+                    g:Disconnect()
+                end
+                else error'cannot cleanup given object'
+        end
+        local function cleanup(g: unknown)
+            local h = d()
+
+            if not h then
+                error'cannot cleanup outside a stable or reactive scope'
+            end
+
+            assert(h)
+
+            if type(g) == 'function' then
+                e(h, g::() -> ())
+            else
+                e(h, helper(g))
+            end
+        end
+
+        type Destroyable = {destroy: (any) -> ()} | {Destroy: (any) -> ()}
+        type Disconnectable = {disconnect: (any) -> ()} | {Disconnect: (any) -> ()}
+
+        return cleanup::((callback:() -> ()) -> ())&((thread:thread) -> ())&((instance:Destroyable) -> ())&((connection:Disconnectable) -> ())&((instance:Instance) -> ())&((connection:RBXScriptConnection) -> ())
+    end
+    function a.o()
+        local b = a.load'b'
+
+        type Node<T> = b.Node<T>
+
+        local c = b.get_scope
+
+        local function untrack<T>(d: () -> T): T
+            local e = c()
+
+            if e then
+                local g = e.effect
+
+                e.effect = false
+
+                local h, i = xpcall(d, debug.traceback)
+
+                e.effect = g::() -> ()
+
+                if not h then
+                    error(i, 0)
+                end
+
+                return i::T
+            else
+                return d()
+            end
+        end
+
+        return untrack::(<T>(fn:() -> T) -> T)&((fn:() -> ()) -> ())
+    end
+    function a.p()
+        local function read<T>(b: T | (() -> T)): T
+            return if type(b) == 'function'then b()else b
+        end
+
+        return read
+    end
+    function a.q()
+        local b = a.load'a'
+        local c = a.load'b'
+
+        local function batch(d: () -> ())
+            local e = b.batch
+            local g
+
+            if not e then
+                b.batch = true
+                g = c.get_update_queue_length()
+            end
+
+            local h, i: string? = xpcall(d, debug.traceback)
+
+            if not e then
+                b.batch = false
+
+                c.flush_update_queue(g)
+            end
+            if not h then
+                error(`error occured while batching updates: {i}`, 0)
+            end
+        end
+
+        return batch
+    end
+    function a.r()
+        local b = a.load'b'
+
+        type Node<T> = b.Node<T>
+
+        local c = b.create_node
+        local d = b.get_scope
+        local e = b.push_scope
+        local g = b.pop_scope
+        local h = b.set_context
+
+        export type Context<T> = (() -> T)&(<U>(T, () -> U) -> U)
+
+        local i = newproxy()
+        local j = 0
+
+        local function context<T>(...: T): Context<T>
+            j += 1
+
+            local k = j
+            local l = select('#', ...) > 0
+            local m = ...
+
+            return function<T>(...): any
+                local n: (Node<unknown>?) | false = d()
+
+                if select('#', ...) == 0 then
+                    while n do
+                        local o = n.context
+
+                        if not o then
+                            n = n.owner
+
+                            continue
+                        end
+
+                        local p = (o::{unknown})[k]
+
+                        if p == nil then
+                            n = n.owner
+
+                            continue
+                        end
+
+                        return (if p ~= i then p else nil)::T
+                    end
+
+                    if l ~= nil then
+                        return m
+                    else
+                        error(
+[[attempt to get context when no context is set and no default context is set]], 0)
+                    end
+                else
+                    if not n then
+                        return error('attempt to set context outside of a vide scope', 0)
+                    end
+
+                    local o, p = ...
+                    local q = c(n, false, false)
+
+                    h(q, k, if o == nil then i else o)
+                    e(q)
+
+                    local function efn(r: string)
+                        return debug.traceback(r, 3)
+                    end
+
+                    local r, s = xpcall(p, efn)
+
+                    g()
+
+                    if not r then
+                        error(`error while running context:\n\n{s}`, 0)
+                    end
+
+                    return s
+                end
+
+                return nil::any
+            end
+        end
+
+        return context
+    end
+    function a.s()
+        local b = a.load'b'
+
+        type Node<T> = b.Node<T>
+        type SourceNode<T> = b.SourceNode<T>
+
+        local c = b.create_node
+        local d = b.evaluate_node
+        local e = b.push_child_to_scope
+        local g = b.destroy
+        local h = b.assert_stable_scope
+        local i = b.push_scope
+        local j = b.pop_scope
+
+        type Map<K, V> = {[K]: V}
+
+        local function switch<T, U>(k: () -> T): (map:Map<T, ((() -> U)?)>) -> () -> U?
+            local l = h()
+
+            return function(m)
+                local n: Node<false>?
+                local o: (() -> U)?
+
+                local function update(p): U?
+                    local q = m[k()]
+
+                    if q == o then
+                        return p
+                    end
+
+                    o = q
+
+                    if n then
+                        g(n::Node<any>)
+
+                        n = nil
+                    end
+                    if q == nil then
+                        return nil
+                    end
+                    if type(q) ~= 'function' then
+                        error'map must map a value to a function'
+                    end
+
+                    local r = c(l, false, false)
+
+                    n = r::Node<any>
+
+                    i(r)
+
+                    local s, t = xpcall(q, debug.traceback)
+
+                    j()
+
+                    if not s then
+                        error(t, 0)
+                    end
+
+                    return t
+                end
+
+                local p = c(l, update, nil)
+
+                d(p)
+
+                return function()
+                    e(p)
+
+                    return p.cache
+                end
+            end
+        end
+
+        return switch
+    end
+    function a.t()
+        local b = a.load'k'
+        local c = a.load'm'
+        local d = a.load'l'
+        local e = a.load'o'
+
+        local function show<T, U>(g: () -> T?, h: (() -> T) -> U, i: (() -> U)?): () -> U?
+            local j = b()
+
+            d(function()
+                local k = g()
+
+                if k then
+                    j(k)
+                end
+            end)
+
+            local k = c(function()
+                return not not g()
+            end)
+
+            return c(function()
+                return if k()
+                    then e(function()
+                        return h(j::() -> T)
+                    end)
+                    elseif i
+                    then e(i)
+                    else nil
+            end)
+        end
+
+        return show
+    end
+    function a.u()
+        local b = a.load'a'
+        local c = a.load'b'
+
+        type Node<T> = c.Node<T>
+        type SourceNode<T> = c.SourceNode<T>
+
+        local d = c.create_node
+        local e = c.create_source_node
+        local g = c.push_child_to_scope
+        local h = c.update_descendants
+        local i = c.assert_stable_scope
+        local j = c.push_scope
+        local k = c.pop_scope
+        local l = c.evaluate_node
+        local m = c.destroy
+
+        type Map<K, V> = {[K]: V}
+
+        local function check_primitives(n: {})
+            if not b.strict then
+                return
+            end
+
+            for o, p in next, n do
+                if type(p) == 'table' or type(p) == 'userdata' or type(p) == 'function' then
+                    continue
+                end
+
+                error('table source map cannot return primitives', 0)
+            end
+        end
+        local function indexes<K, VI, VO>(n: () -> Map<K, VI>, o: (() -> VI, K) -> VO): () -> {VO}
+            local p = i()
+            local q = d(p, false, false)
+            local r = {}::Map<K, VI>
+            local s = {}::Map<K, VO>
+            local t = {}::Map<K, SourceNode<VI>>
+            local u = {}::{K}
+            local v = {}::Map<K, Node<unknown>>
+
+            local function update_children(w)
+                for x in next, r do
+                    if w[x] == nil then
+                        table.insert(u, x)
+                    end
+                end
+                for x, y in next, u do
+                    m(v[y])
+
+                    r[y] = nil
+                    s[y] = nil
+                    t[y] = nil
+                    v[y] = nil
+                end
+
+                table.clear(u)
+                j(q)
+
+                for x, y in next, w do
+                    local z = r[x]
+
+                    if z ~= y then
+                        r[x] = y
+
+                        if z == nil then
+                            local A = d(q, false, false)
+
+                            v[x] = A::Node<any>
+
+                            local B = e(y)
+
+                            j(A)
+
+                            local C, D = xpcall(o, debug.traceback, function()
+                                g(B)
+
+                                return B.cache
+                            end, x)
+
+                            k()
+
+                            if not C then
+                                k()
+                                error(D, 0)
+                            end
+
+                            t[x] = B
+                            s[x] = D
+                        else
+                            t[x].cache = y
+
+                            h(t[x])
+                        end
+                    end
+                end
+
+                k()
+
+                local x = table.create(#v)
+
+                for y, z in next, s do
+                    table.insert(x, z)
+                end
+
+                check_primitives(x)
+
+                return x
+            end
+
+            local w = d(p, function()
+                return update_children(n())
+            end, false::any)
+
+            l(w)
+
+            return function()
+                g(w)
+
+                return w.cache
+            end
+        end
+        local function values<K, VI, VO>(n: () -> Map<K, VI>, o: (VI, () -> K) -> VO): () -> {VO}
+            local p = i()
+            local q = d(p, false, false)
+            local r = {}::Map<VI, K>
+            local s = {}::Map<VI, K>
+            local t = {}::Map<VI, VO>
+            local u = {}::Map<VI, SourceNode<K>>
+            local v = {}::Map<VI, Node<unknown>>
+
+            local function update_children(w: Map<K, VI>)
+                local x, y = r, s
+
+                if b.strict then
+                    local z = {}
+
+                    for A, B in next, w do
+                        if z[B] ~= nil then
+                            error'duplicate table value detected'
+                        end
+
+                        z[B] = true
+                    end
+                end
+
+                j(q)
+
+                for z, A in next, w do
+                    y[A] = z
+
+                    local B = x[A]
+
+                    if B == nil then
+                        local C = d(q, false, false)
+
+                        v[A] = C::Node<any>
+
+                        local D = e(z)
+
+                        j(C)
+
+                        local E, F = xpcall(o, debug.traceback, A, function()
+                            g(D)
+
+                            return D.cache
+                        end)
+
+                        k()
+
+                        if not E then
+                            k()
+                            error(F, 0)
+                        end
+
+                        u[A] = D
+                        t[A] = F
+                    else
+                        if B ~= z then
+                            u[A].cache = z
+
+                            h(u[A])
+                        end
+
+                        x[A] = nil
+                    end
+                end
+
+                k()
+
+                for z in next, x do
+                    m(v[z])
+
+                    t[z] = nil
+                    u[z] = nil
+                    v[z] = nil
+                end
+
+                table.clear(x)
+
+                r, s = y, x
+
+                local z = table.create(#v)
+
+                for A, B in next, t do
+                    table.insert(z, B)
+                end
+
+                check_primitives(z)
+
+                return z
+            end
+
+            local w = d(p, function()
+                return update_children(n())
+            end, false::any)
+
+            l(w)
+
+            return function()
+                g(w)
+
+                return w.cache
+            end
+        end
+
+        return function()
+            return indexes, values
+        end
+    end
+    function a.v()
+        local b = a.load'b'
+
+        type Node<T> = b.Node<T>
+        type SourceNode<T> = b.SourceNode<T>
+
+        local c = b.create_node
+        local d = b.create_source_node
+        local e = b.assert_stable_scope
+        local g = b.evaluate_node
+        local h = b.update_descendants
+        local i = b.push_child_to_scope
+        local j = 120
+        local k = 0.001
+        local l = vector.create(k, k, k)
+
+        type Animatable = number | CFrame | Color3 | UDim | UDim2 | Vector2 | Vector3
+        type SpringState<T> = {k: number, c: number, x0_123: vector, x0_456: vector, x1_123: vector, x1_456: vector, v_123: vector, v_456: vector, source_value: T}
+        type SpringSettings<T> = ({position: T?, velocity: T?, impulse: T?}) -> ()
+        type TypeToVec6<T> = (T) -> (vector,vector)
+        type Vec6ToType<T> = (vector, vector) -> T
+
+        local m = {
+            number = function(m)
+                return vector.create(m, 0, 0), vector.zero
+            end::TypeToVec6<number>,
+            CFrame = function(m)
+                return m.Position, vector.create(m:ToEulerAnglesXYZ())
+            end::TypeToVec6<CFrame>,
+            Color3 = function(m)
+                return vector.create(m.R, m.G, m.B), vector.zero
+            end::TypeToVec6<Color3>,
+            UDim = function(m)
+                return vector.create(m.Scale, m.Offset, 0), vector.zero
+            end::TypeToVec6<UDim>,
+            UDim2 = function(m)
+                return vector.create(m.X.Scale, m.X.Offset, m.Y.Scale), vector.create(m.Y.Offset, 0, 0)
+            end::TypeToVec6<UDim2>,
+            Vector2 = function(m)
+                return vector.create(m.X, m.Y, 0), vector.zero
+            end::TypeToVec6<Vector2>,
+            Vector3 = function(m)
+                return m, vector.zero
+            end::TypeToVec6<Vector3>,
+            Rect = function(m)
+                return vector.create(m.Min.X, m.Min.Y, m.Max.X), vector.create(m.Max.Y, 0, 0)
+            end::TypeToVec6<Rect>,
+        }
+        local n = {
+            number = function(n, o)
+                return n.X
+            end::Vec6ToType<number>,
+            CFrame = function(n, o)
+                return CFrame.new(n) * CFrame.fromEulerAnglesXYZ(o.X, o.Y, o.Z)
+            end::Vec6ToType<CFrame>,
+            Color3 = function(n)
+                return Color3.new(math.clamp(n.X, 0, 1), math.clamp(n.Y, 0, 1), math.clamp(n.Z, 0, 1))
+            end::Vec6ToType<Color3>,
+            UDim = function(n)
+                return UDim.new(n.X, math.round(n.Y))
+            end::Vec6ToType<UDim>,
+            UDim2 = function(n, o)
+                return UDim2.new(n.X, math.round(n.Y), n.Z, math.round(o.X))
+            end::Vec6ToType<UDim2>,
+            Vector2 = function(n)
+                return Vector2.new(n.X, n.Y)
+            end::Vec6ToType<Vector2>,
+            Vector3 = function(n)
+                return n
+            end::Vec6ToType<Vector3>,
+            Rect = function(n, o)
+                return Rect.new(n.X, n.Y, n.Z, o.X)
+            end::Vec6ToType<Rect>,
+        }
+        local o = {
+            __index = function(o, p: string)
+                error(`cannot spring type {p}`, 0)
+            end,
+        }
+
+        setmetatable(m, o)
+        setmetatable(n, o)
+
+        local p: {[SpringState<unknown>]: SourceNode<unknown>} = {}
+
+        setmetatable(p::any, {
+            __mode = 'v',
+        })
+
+        local function spring<T>(q: () -> T, r: number?, s: number?): (() -> T,SpringSettings<T>)
+            local t = e()
+            local u = 2 * math.pi / (r or 1)
+            local v = s or 1
+            local w = u ^ 2
+            local x = 2 * u
+            local y = v * x
+
+            if y > j * 2 then
+                error(
+[[spring damping too high, consider reducing damping or increasing period]], 0)
+            end
+
+            local z: SpringState<T> = {
+                k = w,
+                c = y,
+                x0_123 = vector.zero,
+                x1_123 = vector.zero,
+                v_123 = vector.zero,
+                x0_456 = vector.zero,
+                x1_456 = vector.zero,
+                v_456 = vector.zero,
+                source_value = false::any,
+            }
+            local A = d(false::any)
+
+            local function updater_effect()
+                local B = q()
+
+                z.x1_123, z.x1_456 = m[typeof(B)](B)
+                z.source_value = B
+                p[z] = A
+
+                return B
+            end
+
+            local B = c(t, updater_effect, false::any)
+
+            g(B)
+
+            z.x0_123, z.x0_456 = z.x1_123, z.x1_456
+            A.cache = z.source_value
+
+            local C = function(C)
+                local D = C.position
+                local E = C.velocity
+                local F = C.impulse
+
+                if D then
+                    z.x0_123, z.x0_456 = m[typeof(D)](D)
+                end
+                if E then
+                    z.v_123, z.v_456 = m[typeof(E)](E)
+                end
+                if F then
+                    local G, H = m[typeof(F)](F)
+
+                    z.v_123 += G
+                    z.v_456 += H
+                end
+
+                p[z] = A
+            end::SpringSettings<T>
+
+            return function(...)
+                if select('#', ...) == 0 then
+                    i(A)
+
+                    return A.cache
+                end
+
+                local D = ...::T
+
+                z.x0_123, z.x0_456 = m[typeof(D)](D)
+                z.v_123 = vector.zero
+                z.v_456 = vector.zero
+                p[z] = A
+                A.cache = D
+
+                return D
+            end, C
+        end
+        local function step_springs(q: number)
+            for r in next, p do
+                local s, t, u, v, w, x, y, z = r.k, r.c, r.x0_123, r.x1_123, r.v_123, r.x0_456, r.x1_456, r.v_456
+                local A = u - v
+                local B = x - y
+                local C = A * -s
+                local D = B * -s
+                local E = w * -t
+                local F = z * -t
+                local G = (C + E) * q
+                local H = (D + F) * q
+                local I = w + G
+                local J = z + H
+                local K = u + I * q
+                local L = x + J * q
+
+                r.x0_123, r.x0_456 = K, L
+                r.v_123, r.v_456 = I, J
+            end
+        end
+        local function update_spring_sources()
+            for q, r in p do
+                local s, t, u, v, w, x = q.x0_123, q.x1_123, q.v_123, q.x0_456, q.x1_456, q.v_456
+                local y = vector.max(vector.abs(s - t::any), vector.abs(v - w::any), vector.abs(u::any), vector.abs(x::any), l)
+
+                if y == l then
+                    p[q] = nil
+                    r.cache = q.source_value
+                else
+                    r.cache = n[typeof(q.source_value)](s, v)
+                end
+
+                h(r)
+            end
+        end
+
+        return function()
+            local q = 0
+
+            return spring, function(r: number)
+                q += r
+
+                while q > 1 / j do
+                    q -= 1 / j
+
+                    step_springs(1 / j)
+                end
+
+                update_spring_sources()
+            end
+        end
+    end
+    function a.w()
+        local b = a.load'f'()
+        local c = a.load'n'
+
+        local function changed<T>(d: string, e: (T) -> ())
+            return b(function(g)
+                local h = g:GetPropertyChangedSignal(d):Connect(function()
+                    e((g::any)[d])
+                end)
+
+                c(function()
+                    h:Disconnect()
+                end)
+                e((g::any)[d])
+            end)
+        end
+
+        return changed
+    end
+end
+
+local b = {
+    major = 0,
+    minor = 3,
+    patch = 1,
+}
+local c = a.load'c'
+local d = a.load'h'
+local e = a.load'j'
+local g = a.load'g'
+local h = a.load'k'
+local i = a.load'l'
+local j = a.load'm'
+local k = a.load'n'
+local l = a.load'o'
+local m = a.load'p'
+local n = a.load'q'
+local o = a.load'r'
+local p = a.load's'
+local q = a.load't'
+local r, s = a.load'u'()
+local t, u = a.load'v'()
+local v = a.load'f'()
+local w = a.load'w'
+local x = a.load'a'
+
+export type Source<T> = h.Source<T>
+export type source<T> = Source<T>
+export type Context<T> = o.Context<T>
+export type context<T> = Context<T>
+
+local function step(y: number)
+    if game then
+        debug.profilebegin'VIDE STEP'
+        debug.profilebegin'VIDE SPRING'
+    end
+
+    u(y)
+
+    if game then
+        debug.profileend()
+        debug.profileend()
+    end
+end
+
+local y = game and game:GetService'RunService'.Heartbeat:Connect(function(
+    y: number
+)
+    task.defer(step, y)
+end)
+
+vide = {
+    version = b,
+    root = c,
+    mount = d,
+    create = e,
+    source = h,
+    effect = i,
+    derive = j,
+    switch = p,
+    show = q,
+    indexes = r,
+    values = s,
+    cleanup = k,
+    untrack = l,
+    read = m,
+    batch = n,
+    context = o,
+    spring = t,
+    action = v,
+    changed = w,
+    strict = (nil::any)::boolean,
+    defer_nested_properties = (nil::any)::boolean,
+    apply = function(z: Instance)
+        return function(A: {[any]: any})
+            g(z, A)
+
+            return z
+        end
+    end,
+    step = function(z: number)
+        if y then
+            y:Disconnect()
+
+            y = nil
+        end
+
+        step(z)
+    end,
+}
+end
