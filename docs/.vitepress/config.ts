@@ -1,5 +1,7 @@
 //import { defineConfig } from "vitepress"
 import { withMermaid } from "vitepress-plugin-mermaid";
+import container from 'markdown-it-container'
+import { renderSandbox } from 'vitepress-plugin-sandpack'
 
 // https://vitepress.dev/reference/site-config
 export default withMermaid({
@@ -8,6 +10,22 @@ export default withMermaid({
     description: "A reactive UI library for Luau.",
     base: "/vide/",
     head: [["link", { rel: "icon", href: "/vide/logo.svg" }]],
+
+    markdown: {
+        config(md) {
+            md
+            .use(container, 'sandbox', {
+                render (tokens, idx) {
+                    return renderSandbox(tokens, idx, 'sandbox')
+                }
+            })
+            .use(container, 'luau-sandbox', {
+                render (tokens, idx) {
+                    return renderSandbox(tokens, idx, 'luau-sandbox')
+                }
+            })
+        }
+    },
 
     themeConfig: {
         logo: "/logo.svg",
@@ -65,7 +83,8 @@ export default withMermaid({
                 {
                     text: "Advanced",
                     items: [
-                        { text: "Dynamic Scopes", link: "/tut/advanced/dynamic-scopes"}
+                        { text: "Dynamic Scopes", link: "/tut/advanced/dynamic-scopes"},
+                        { text: "Websites", link: "/tut/advanced/html" }
                     ]
                 },
                 {

@@ -1,0 +1,7 @@
+{
+    "compilerOptions": {
+        "isolatedModules": true,
+        "jsx": "preserve",
+        "jsxImportSource": "vue"
+    }
+}
