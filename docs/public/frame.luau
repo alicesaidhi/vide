@@ -36,7 +36,7 @@ Instance.add_proxy("Frame", function()
             AnchorPoint = Vector2.new(0, 0),
 
             BackgroundTransparency = 0,
-            BackgroundColor3 = Color3.new(0, 0, 0),
+            BackgroundColor3 = Color3.new(0.5, 0.5, 0.5),
         },
         class = "Frame",
         changed_signal = Signal.new() :: any,
@@ -71,7 +71,7 @@ Instance.add_proxy("Frame", function()
             declaration:invoke("setProperty", "width", swidth)
             declaration:invoke("setProperty", "height", sheight)
             declaration:invoke("setProperty", "transform", stransform)
-            declaration:invoke("setProperty", "position", "absolute")
+            declaration:invoke("setProperty", "position", "relative")
 
             local parent = instance.Parent
             
@@ -82,6 +82,7 @@ Instance.add_proxy("Frame", function()
             end
 
             dirty = false
+            declaration:release()
         end
 
         instance:GetPropertyChangedSignal("Position"):Connect(rerender)
@@ -93,7 +94,6 @@ Instance.add_proxy("Frame", function()
         
     end
 end)
-
 
 Instance.add_proxy("TextLabel", function()
 
@@ -108,7 +108,7 @@ Instance.add_proxy("TextLabel", function()
             AnchorPoint = Vector2.new(0, 0),
 
             BackgroundTransparency = 0,
-            BackgroundColor3 = Color3.new(0, 0, 0),
+            BackgroundColor3 = Color3.new(0.5, 0.5, 0.5),
 
             Text = "",
             TextSize = 8,
@@ -125,7 +125,7 @@ Instance.add_proxy("TextLabel", function()
 
         handle:invoke("appendChild", p)
 
-        local instance: Frame = instance
+        local instance: TextLabel = instance
         local dirty = true
 
         instance._handle = handle
@@ -133,6 +133,7 @@ Instance.add_proxy("TextLabel", function()
 
         local function rerender()
             local declaration = handle:get("style")
+            if declaration == nil then error("no declaration fuond") end
             
             local size = instance.Size
             local position = instance.Position
@@ -152,14 +153,14 @@ Instance.add_proxy("TextLabel", function()
             declaration:invoke("setProperty", "width", swidth)
             declaration:invoke("setProperty", "height", sheight)
             declaration:invoke("setProperty", "transform", stransform)
-            declaration:invoke("setProperty", "position", "absolute")
+            declaration:invoke("setProperty", "position", "relative")
 
             local declaration = p:get("style")
             local textColor = instance.TextColor3
             local textSize = instance.TextSize
             local text = instance.Text or ""
-            print(text)
-            -- p:set("textContent", text)
+            -- print("rerender", text)
+            p:set("textContent", text)
             declaration:invoke("setProperty", "color", `rgba({textColor.R * 255}, {textColor.G * 255}, {textColor.B * 255}, {1 - instance.TextTransparency})`)
             declaration:invoke("setProperty", "font-size", `{textSize}px`)
 
@@ -171,6 +172,7 @@ Instance.add_proxy("TextLabel", function()
                 handle:invoke("remove")
             end
 
+            declaration:release()
             dirty = false
         end
 
@@ -180,10 +182,13 @@ Instance.add_proxy("TextLabel", function()
         instance:GetPropertyChangedSignal("BackgroundTransparency"):Connect(rerender)
         instance:GetPropertyChangedSignal("AnchorPoint"):Connect(rerender)
         instance:GetPropertyChangedSignal("Parent"):Connect(rerender)
+        instance:GetPropertyChangedSignal("Text"):Connect(rerender)
+        instance:GetPropertyChangedSignal("TextSize"):Connect(rerender)
+        instance:GetPropertyChangedSignal("TextTransparency"):Connect(rerender)
+        instance:GetPropertyChangedSignal("TextColor3"):Connect(rerender)
         
     end
 end)
-
 
 Instance.add_proxy("TextButton", function()
 
@@ -198,7 +203,7 @@ Instance.add_proxy("TextButton", function()
             AnchorPoint = Vector2.new(0, 0),
 
             BackgroundTransparency = 0,
-            BackgroundColor3 = Color3.new(0, 0, 0),
+            BackgroundColor3 = Color3.new(0.5, 0.5, 0.5),
 
             Text = "",
             TextSize = 8,
@@ -218,7 +223,7 @@ Instance.add_proxy("TextButton", function()
 
         handle:invoke("appendChild", p)
 
-        local instance: Frame = instance
+        local instance: TextButton = instance
         local dirty = true
 
         instance._handle = handle
@@ -244,13 +249,13 @@ Instance.add_proxy("TextButton", function()
             declaration:invoke("setProperty", "width", swidth)
             declaration:invoke("setProperty", "height", sheight)
             declaration:invoke("setProperty", "transform", stransform)
-            declaration:invoke("setProperty", "position", "absolute")
+            declaration:invoke("setProperty", "position", "relative")
 
             local declaration = p:get("style")
             local textColor = instance.TextColor3
             local textSize = instance.TextSize
             local text = tostring(instance.Text or "")
-            -- p:set("textContent", text)
+            p:set("textContent", text)
             declaration:invoke("setProperty", "color", `rgba({textColor.R * 255}, {textColor.G * 255}, {textColor.B * 255}, {1 - instance.TextTransparency})`)
             declaration:invoke("setProperty", "font-size", `{textSize}px`)
 
@@ -262,11 +267,11 @@ Instance.add_proxy("TextButton", function()
                 handle:invoke("remove")
             end
 
+            declaration:release()
             dirty = false
         end
-
+        
         local function fire()
-            print("fire")
             Signal.fire(activated, true)
         end
         handle:invoke("addEventListener", "click", web.marshal(fire))
@@ -276,6 +281,67 @@ Instance.add_proxy("TextButton", function()
         instance:GetPropertyChangedSignal("BackgroundColor3"):Connect(rerender)
         instance:GetPropertyChangedSignal("BackgroundTransparency"):Connect(rerender)
         instance:GetPropertyChangedSignal("AnchorPoint"):Connect(rerender)
+        instance:GetPropertyChangedSignal("Parent"):Connect(rerender)
+        instance:GetPropertyChangedSignal("Text"):Connect(rerender)
+        instance:GetPropertyChangedSignal("TextSize"):Connect(rerender)
+        instance:GetPropertyChangedSignal("TextTransparency"):Connect(rerender)
+        instance:GetPropertyChangedSignal("TextColor3"):Connect(rerender)
+        
+    end
+end)
+
+Instance.add_proxy("UIListLayout", function()
+
+    return {
+        name = "UNNAMED",
+        parent = nil,
+        children = {},
+        changed = {},
+        properties = {
+            Padding = UDim.new(0, 0)
+        },
+        class = "UIListLayout",
+        changed_signal = Signal.new() :: any,
+        destroying = Signal.new() :: any,
+        type = "Instance" :: "Instance"
+    }, function(instance: any)
+        print("creating uilist")
+        local handle = document:invoke("createElement", "div")
+        local declaration = handle:get("style")
+        declaration:invoke("setProperty", "display", "none")
+        declaration:release()
+
+        local instance: UIListLayout = instance
+        local dirty = true
+
+        instance._handle = handle
+        local previous_parent = nil
+
+        local function rerender()
+            local parent = instance.Parent
+                        
+            if parent and parent.properties._handle then
+                local declaration = parent.properties._handle:get("style")
+                parent.properties._handle:invoke("appendChild", handle)
+                declaration:invoke("setProperty", "display", "flex")
+                declaration:invoke("setProperty", "gap", `calc({instance.Padding.scale}% + {instance.Padding.offset}px)`)
+                declaration:invoke("setProperty", "flex-direction", "column")
+                declaration:release()
+            else
+                handle:invoke("remove")
+            end
+
+            if previous_parent ~= parent and previous_parent and previous_parent.properties._handle then
+                local declaration = previous_parent._handle:get("style")
+                declaration:invoke("removeProperty", "display")
+                declaration:release()
+            end
+
+            previous_parent = parent
+            dirty = false
+        end
+
+        instance:GetPropertyChangedSignal("Padding"):Connect(rerender)
         instance:GetPropertyChangedSignal("Parent"):Connect(rerender)
         
     end

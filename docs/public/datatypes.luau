@@ -48,11 +48,26 @@ local UDim2 = { __type = "UDim2" } do
         return table_to_proxy(setmetatable({ x = { scale = x, offset = 0 }, y = { scale = y, offset = 0 } }, UDim2))
     end
 
+    function UDim2.fromOffset(x, y)
+        return table_to_proxy(setmetatable({ x = { scale = 0, offset = x }, y = { scale = 0, offset = y } }, UDim2))
+    end
+
     function UDim2.__eq(a, b)
         return a.x.scale == b.x.scale and
             b.x.offset == b.x.offset and
             a.y.scale == b.y.scale and
             a.y.offset == b.y.offset
+    end
+end
+
+local UDim = { __type = "UDim" } do
+    function UDim.new(scale, offset)
+        return table_to_proxy(setmetatable({ scale = scale, offset = offset }, UDim2))
+    end
+
+    function UDim.__eq(a, b)
+        return a.scale == b.scale and
+            b.offset == b.offset
     end
 end
 

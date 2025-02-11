@@ -3,7 +3,10 @@
 Reactive components in Vide are created using sources and effects - sources to
 store the data, and effects to display the data.
 
-```luau
+::: luau-sandbox {template=vanilla-ts}
+<<< @/public/index.ts{#hidden}
+
+```luau /app.luau [active]
 local create = vide.create
 local source = vide.source
 local effect = vide.effect
@@ -12,6 +15,8 @@ local function Counter()
     local count = source(0)
 
     local instance = create "TextButton" {
+        Size = UDim2.fromOffset(100, 50),
+        TextSize = 16,
         Activated = function()
             count(count() + 1)
         end
@@ -23,7 +28,10 @@ local function Counter()
 
     return instance
 end
+
+vide.mount(Counter, create "ScreenGui" {})
 ```
+:::
 
 Above is an example of a counter component, that when clicked, will increment
 its internal count, and automatically update its text to reflect that count.

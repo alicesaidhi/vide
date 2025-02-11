@@ -1130,7 +1130,7 @@ do
                 local j, k: Instance = pcall(c.new, i::any)
 
                 if not j then
-                    error(`invalid class name, could not create instance of class {i}`, 0)
+                    error(`invalid class name, could not create instance of class {i}: {k}`, 0)
                 end
 
                 local l: {[string]: unknown}? = d[i]
