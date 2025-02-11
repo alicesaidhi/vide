@@ -188,7 +188,7 @@ local Instance = {} do
         local creator = classes[class]
         if not creator then error(`No class exists with the name "{class}" {debug.traceback()}`) end
         local clone_data, fn = creator(class)
-        local clone_userdata = get_proxy(data) :: any
+        local clone_userdata = get_proxy(clone_data) :: any
 
         clone_data.properties = table.clone(data.properties)
         if fn then fn(clone_userdata) end

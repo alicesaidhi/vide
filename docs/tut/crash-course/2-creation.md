@@ -5,7 +5,10 @@ Instances are created using `create()`.
 Parentheses `()` can be omitted when calling functions with string or
 table literals for brevity.
 
-```luau
+::: luau-sandbox {template=vanilla-ts}
+<<< @/public/index.ts{#hidden}
+
+```luau /app.luau [active]
 local create = vide.create
 
 return create "ScreenGui" {
@@ -32,6 +35,7 @@ return create "ScreenGui" {
     }
 }
 ```
+:::
 
 Assign a value to a string key to set a property, and assign a value to a
 number key to set a child. Events can be connected to by assigning a function
