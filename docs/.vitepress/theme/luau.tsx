@@ -17,7 +17,7 @@ export default defineComponent({
         
         options={{
           showLineNumbers: true,
-          externalResources: ['http://localhost:5173/vide/cart.wasm']
+          externalResources: []
         }}
         customSetup={{
           deps: {
