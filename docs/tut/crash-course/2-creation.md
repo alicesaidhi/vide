@@ -19,15 +19,20 @@ return create "ScreenGui" {
         Position = UDim2.fromScale(0.5, 0.5),
         Size = UDim2.fromScale(0.4, 0.7),
 
+          create "UIListLayout" { Padding = UDim.new(0, 32) },
+
         create "TextLabel" {
-            Text = "hi"
+          Size = UDim2.fromOffset(200, 50),
+            Text = "hiiiii"
         },
 
         create "TextLabel" {
+          Size = UDim2.fromOffset(200, 50),
             Text = "bye"
         },
 
         create "TextButton" {
+          Size = UDim2.fromOffset(200, 50),
             Text = "click me",
 
             Activated = function()
