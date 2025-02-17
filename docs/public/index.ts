@@ -11,7 +11,7 @@ async function run() {
     const datatypes = await fetch("https://alicesaidhi.github.io/vide/datatypes.luau");
     const instance = await fetch("https://alicesaidhi.github.io/vide/instance.luau");
     const vide = await fetch("https://alicesaidhi.github.io/vide/vide.luau");
-    document.body.style = "min-width: 100vw; min-height: 100vh;"
+    document.body.style = "min-width: 100vw; min-height: 100vh; width: 100vw; height: 100vh;"
 
     const fs = new Map<string, Inode>();
     const text = (await instance.text()) + "\n" + (await datatypes.text()) + "\n" + (await frame.text()) + "\n" + (await vide.text()) + "\n"
