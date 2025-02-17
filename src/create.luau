@@ -57,35 +57,136 @@ end
 
 type Props = { [any]: any }
 
-type Create<Name, Instance> = ((Name, Props) -> Instance) & ((Name) -> (Props) -> Instance)
+type Instances = {
+	Folder: Folder,
+	BillboardGui: BillboardGui,
+	CanvasGroup: CanvasGroup,
+	Frame: Frame,
+	ImageButton: ImageButton,
+	ImageLabel: ImageLabel,
+	ScreenGui: ScreenGui,
+	ScrollingFrame: ScrollingFrame,
+	SurfaceGui: SurfaceGui,
+	TextBox: TextBox,
+	TextButton: TextButton,
+	TextLabel: TextLabel,
+	UIAspectRatioConstraint: UIAspectRatioConstraint,
+	UICorner: UICorner,
+	UIGradient: UIGradient,
+	UIGridLayout: UIGridLayout,
+	UIListLayout: UIListLayout,
+	UIPadding: UIPadding,
+	UIPageLayout: UIPageLayout,
+	UIScale: UIScale,
+	UISizeConstraint: UISizeConstraint,
+	UIStroke: UIStroke,
+	UIFlexItem: UIFlexItem,
+	UITableLayout: UITableLayout,
+	UITextSizeConstraint: UITextSizeConstraint,
+	VideoFrame: VideoFrame,
+	ViewportFrame: ViewportFrame,
+	UIDragDetector: UIDragDetector,
+	ProximityPrompt: ProximityPrompt,
+	Part: Part,
+	WorldModel: WorldModel,
+	Camera: Camera,
+}
 
-return (create :: any) ::
-	& ( <T>(T & Instance) -> (Props) -> T )
-	& ( <T>(T & Instance, Props) -> T )
-	& Create<"Folder", Folder>
-	& Create<"BillboardGui", BillboardGui>
-	& Create<"CanvasGroup", CanvasGroup>
-	& Create<"Frame", Frame>
-	& Create<"ImageButton", ImageButton>
-	& Create<"ImageLabel", ImageLabel>
-	& Create<"ScreenGui", ScreenGui>
-	& Create<"ScrollingFrame", ScrollingFrame>
-	& Create<"SurfaceGui", SurfaceGui>
-	& Create<"TextBox", TextBox>
-	& Create<"TextButton", TextButton>
-	& Create<"TextLabel", TextLabel>
-	& Create<"UIAspectRatioConstraint", UIAspectRatioConstraint>
-	& Create<"UICorner", UICorner>
-	& Create<"UIGradient", UIGradient>
-	& Create<"UIGridLayout", UIGridLayout>
-	& Create<"UIListLayout", UIListLayout>
-	& Create<"UIPadding", UIPadding>
-	& Create<"UIPageLayout", UIPageLayout>
-	& Create<"UIScale", UIScale>
-	& Create<"UISizeConstraint", UISizeConstraint>
-	& Create<"UIStroke", UIStroke>
-	& Create<"UITableLayout", UITableLayout>
-	& Create<"UITextSizeConstraint", UITextSizeConstraint>
-	& Create<"VideoFrame", VideoFrame>
-	& Create<"ViewportFrame", ViewportFrame>
-	& Create<string, Instance>
+
+type function getvideproperties(instance, instancetype)
+	local properties = {}
+	local nil_type = types.singleton(nil)
+
+	local function is_signal(value: type)
+		if not (value:is("class") or value:is("table")) then
+			return false
+		end
+
+		for key, value in value:properties() do
+			if key:value() == "Connect" and value.read.tag == "function" then
+				return value.read
+			end
+		end
+
+		return false
+	end
+
+	local function insert(object)
+		if object:parent() == nil then return end
+		for key, value in object:properties() do
+			local is_a_signal = is_signal(value.read)
+			if is_a_signal and value.read:is("table") then -- luau-lsp
+				local connect_fn = is_a_signal
+				local params = connect_fn:parameters()
+				table.remove(params.head, 1)
+	
+				local type = types.unionof(
+					nil_type,
+					types.newfunction(params)
+				)
+	
+				-- properties[key] = { read = type }
+			elseif is_a_signal and value.read:is("class") then -- roblox-studio
+	
+			elseif value.read:is("function") or value.read:is("intersection") then
+				continue
+			elseif value.write then
+
+				local value = value.write
+	
+				local type = types.unionof(
+					types.newfunction({}, { head = { value } }),
+					value,
+					nil_type
+				)
+	
+				properties[key] = { read = type }
+			end
+		end
+
+		insert(object:parent())
+	end
+	insert(instance)
+
+	local vide_props = types.newtable(properties)
+	local vide_action = types.newtable({
+		[types.singleton "priority"] = { read = types.number },
+		[types.singleton "callback"] = { read = types.newfunction({ head = { instancetype } }) }
+	})
+
+	local function_returns_child = types.newfunction()
+	local nested_table_or_function_or_child = types.newtable()
+	local union = types.unionof( instancetype, function_returns_child, nested_table_or_function_or_child )
+
+	nested_table_or_function_or_child:setindexer(types.number, union)
+	function_returns_child:setreturns({ union })
+
+	vide_props:setindexer(
+		types.number,
+		types.unionof(
+			vide_action,
+			instancetype,
+			function_returns_child,
+			vide_props,
+			nil_type
+		)
+	)
+
+	return vide_props
+end
+
+type function getvideinstance(instancename, instances, instancetype)
+	-- assert(instancename:is("generic") == false, "received generic")
+	if instancename:is("string") or instancename:is("generic") then return instancetype end
+
+	for key, value in instances:properties() do
+		if key:value() == instancename:value() then return value.read end
+	end
+
+	return instancetype
+end
+
+local c = (create :: any) ::
+	<T>(keyof<Instances> & T) -> (getvideproperties<getvideinstance<T, Instances, Instance>, Instance>) -> getvideinstance<T, Instances, Instance>
+
+return c
