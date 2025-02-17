@@ -11,6 +11,7 @@ import './index.css'
 
 import LuauSandbox from './luau.tsx';
 import 'vitepress-plugin-sandpack/dist/style.css'
+import { enhanceAppWithTabs } from 'vitepress-plugin-tabs/client'
 
 export default {
 	extends: DefaultTheme,
@@ -21,6 +22,7 @@ export default {
 	Layout: layout
 =======
 	enhanceApp(ctx) {
+		enhanceAppWithTabs(ctx.app)
 		DefaultTheme.enhanceApp(ctx),
 		ctx.app.component('Sandbox', Sandbox);
 		ctx.app.component("LuauSandbox", LuauSandbox)

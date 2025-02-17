@@ -12,7 +12,8 @@
         "vite": "^6.0.11",
         "vitepress": "^1.4.5",
         "vitepress-plugin-mermaid": "2.0.17",
-        "vitepress-plugin-sandpack": "^1.1.4"
+        "vitepress-plugin-sandpack": "^1.1.4",
+        "vitepress-plugin-tabs": "^0.6.0"
     },
     "dependencies": {
         "cart-luau": "^0.1.1"

@@ -11,7 +11,11 @@ updates.
 
 The simplest example is using `show()`.
 
-```luau
+
+::: luau-sandbox {template=vanilla-ts}
+<<< @/public/index.ts{#hidden}
+
+```luau /app.luau [active]
 local source = vide.source
 local create = vide.create
 local show = vide.show
@@ -19,6 +23,8 @@ local root = vide.root
 
 function Button(props: { Text: string, Activated: () -> () })
     return create "TextButton" {
+        Size = UDim2.fromOffset(100, 50),
+        TextSize = 20,
         Text = props.Text,
         Activated = props.Activated
     }
@@ -26,6 +32,8 @@ end
 
 function Menu()
     return create "TextLabel" {
+        Size = UDim2.fromOffset(100, 50),
+        TextSize = 20,
         Text = "This is a menu"
     }
 end
@@ -34,6 +42,8 @@ function App()
     local toggled = source(false)
 
     return create "ScreenGui" {
+        create "UIListLayout" {},
+
         Button {
             Text = "Toggle Menu",
             Activated = function()
@@ -46,9 +56,10 @@ function App()
 end
 
 root(function()
-    App().Parent = game.StarterGui
+    App()
 end)
 ```
+:::
 
 This is a complete example of rendering UI which has a single button that
 toggles the opening of a menu.

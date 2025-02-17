@@ -36,7 +36,7 @@ Instance.add_proxy("Frame", function()
             AnchorPoint = Vector2.new(0, 0),
 
             BackgroundTransparency = 0,
-            BackgroundColor3 = Color3.new(0.5, 0.5, 0.5),
+            BackgroundColor3 = Color3.new(0.6, 0.6, 0.6),
         },
         class = "Frame",
         changed_signal = Signal.new() :: any,
@@ -108,7 +108,7 @@ Instance.add_proxy("TextLabel", function()
             AnchorPoint = Vector2.new(0, 0),
 
             BackgroundTransparency = 0,
-            BackgroundColor3 = Color3.new(0.5, 0.5, 0.5),
+            BackgroundColor3 = Color3.new(0.6, 0.6, 0.6),
 
             Text = "",
             TextSize = 8,
@@ -203,7 +203,7 @@ Instance.add_proxy("TextButton", function()
             AnchorPoint = Vector2.new(0, 0),
 
             BackgroundTransparency = 0,
-            BackgroundColor3 = Color3.new(0.5, 0.5, 0.5),
+            BackgroundColor3 = Color3.new(0.6, 0.6, 0.6),
 
             Text = "",
             TextSize = 8,
@@ -289,6 +289,105 @@ Instance.add_proxy("TextButton", function()
         
     end
 end)
+
+Instance.add_proxy("TextBox", function()
+
+    return {
+        name = "UNNAMED",
+        parent = nil,
+        children = {},
+        changed = {},
+        properties = {
+            Position = UDim2.new(0, 0, 0, 0),
+            Size = UDim2.new(0, 0, 0, 0),
+            AnchorPoint = Vector2.new(0, 0),
+
+            BackgroundTransparency = 0,
+            BackgroundColor3 = Color3.new(0.6, 0.6, 0.6),
+
+            Text = "",
+            TextSize = 8,
+            TextTransparency = 0,
+            TextColor3 = Color3.new(0, 0, 0)
+        },
+        class = "TextBox",
+        changed_signal = Signal.new() :: any,
+        destroying = Signal.new() :: any,
+        type = "Instance" :: "Instance"
+    }, function(instance: any)
+        local handle = document:invoke("createElement", "input")
+
+        handle:invoke("setAttribute", "type", "text")
+
+        local instance: TextButton = instance
+        local p
+        local dirty = true
+
+        instance._handle = handle
+
+        local function rerender()
+            local declaration = handle:get("style")
+            
+            local size = instance.Size
+            local position = instance.Position
+            local anchor_point = instance.AnchorPoint
+
+            local bgcolor = instance.BackgroundColor3
+            local bg = `rgba({bgcolor.R * 255}, {bgcolor.G * 255}, {bgcolor.B * 255}, {1 - instance.BackgroundTransparency})`
+            local swidth = `calc({size.x.scale * 100}% + {size.x.offset}px)`
+            local sheight = `calc({size.y.scale * 100}% + {size.y.offset}px)`
+            local stop = `calc({position.x.scale * 100}% + {position.x.offset}px)`
+            local sleft = `calc({position.y.scale * 100}% + {position.y.offset}px)`
+            local stransform = `translate({anchor_point.X * -100}%, {anchor_point.Y * -100}%)`
+
+            declaration:invoke("setProperty", "background-color", bg)
+            declaration:invoke("setProperty", "top", stop)
+            declaration:invoke("setProperty", "left", sleft)
+            declaration:invoke("setProperty", "width", swidth)
+            declaration:invoke("setProperty", "height", sheight)
+            declaration:invoke("setProperty", "transform", stransform)
+            declaration:invoke("setProperty", "position", "relative")
+
+            -- local textColor = instance.TextColor3
+            -- local textSize = instance.TextSize
+            -- -- local text = tostring(instance.Text or "")
+            -- -- handle:invoke("setAttribute", "value", text)
+            -- declaration:invoke("setProperty", "color", `rgba({textColor.R * 255}, {textColor.G * 255}, {textColor.B * 255}, {1 - instance.TextTransparency})`)
+            -- declaration:invoke("setProperty", "font-size", `{textSize}px`)
+
+            local parent = instance.Parent
+            
+            if parent and parent.properties._handle then
+                parent.properties._handle:invoke("appendChild", handle)
+            else
+                handle:invoke("remove")
+            end
+
+            declaration:release()
+            dirty = false
+        end
+        
+        local function fire(new)
+            local s = tostring(new)
+            print(s)
+            -- Signal.fire(activated, true)
+        end
+        handle:invoke("addEventListener", "input", web.marshal(fire))
+
+        instance:GetPropertyChangedSignal("Position"):Connect(rerender)
+        instance:GetPropertyChangedSignal("Size"):Connect(rerender)
+        instance:GetPropertyChangedSignal("BackgroundColor3"):Connect(rerender)
+        instance:GetPropertyChangedSignal("BackgroundTransparency"):Connect(rerender)
+        instance:GetPropertyChangedSignal("AnchorPoint"):Connect(rerender)
+        instance:GetPropertyChangedSignal("Parent"):Connect(rerender)
+        instance:GetPropertyChangedSignal("Text"):Connect(rerender)
+        instance:GetPropertyChangedSignal("TextSize"):Connect(rerender)
+        instance:GetPropertyChangedSignal("TextTransparency"):Connect(rerender)
+        instance:GetPropertyChangedSignal("TextColor3"):Connect(rerender)
+        
+    end
+end)
+
 
 Instance.add_proxy("UIListLayout", function()
 

@@ -2,6 +2,7 @@
 import { withMermaid } from "vitepress-plugin-mermaid";
 import container from 'markdown-it-container'
 import { renderSandbox } from 'vitepress-plugin-sandpack'
+import { tabsMarkdownPlugin } from 'vitepress-plugin-tabs'
 
 // https://vitepress.dev/reference/site-config
 export default withMermaid({
@@ -14,6 +15,7 @@ export default withMermaid({
     markdown: {
         config(md) {
             md
+            .use(tabsMarkdownPlugin)
             .use(container, 'sandbox', {
                 render (tokens, idx) {
                     return renderSandbox(tokens, idx, 'sandbox')
