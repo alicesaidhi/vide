@@ -34,8 +34,8 @@ local function switch<T, U>(source: () -> T): (map: Map<T, ((() -> U)?)>) -> () 
                 error "map must map a value to a function"
             end
 
-            local new_scope = create_node(owner, false, false)
-            last_scope = new_scope :: Node<any>
+            local new_scope = create_node(owner, false, false :: false)
+            last_scope = new_scope
             
             push_scope(new_scope)
         

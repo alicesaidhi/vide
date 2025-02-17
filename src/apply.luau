@@ -12,26 +12,26 @@ type Map<K, V> = { [K]: V }
 
 type Cache = {
     -- event listeners to connect after properties are set
-    events: Array<
+    read events: Array<
         | string -- 1. event name
         | () -> () -- 2. listener
     >,
 
     -- actions to run after events are connected
-    actions: Map<
+    read actions: Map<
         number, -- priority
         Array<(Instance) -> ()> -- action callbacks
     >,
 
     -- cache to detect duplicate property setting at same nesting depth
-    nested_debug: Map<
+    read nested_debug: Map<
         number, -- depth
         Map<string, true> -- set of property names
     >,
 
     -- each nested layer occupies two indexes: 1. table ref 2. nested depth
     -- e.g. { t1 = { t3 = {} }, t2 = {} } -> { t1, 1, t2, 1, t3, 2 }
-    nested_stack: { {} | number }
+    read nested_stack: { {} | number }
 }
 
 local free_cache: Cache?
@@ -44,12 +44,12 @@ local function borrow_cache(): Cache
     else
         return {
             events = {},
-            actions = setmetatable({} :: any, { -- lazy init
+            actions = setmetatable({}, { -- lazy init
                 __index = function(self, i) self[i] = {}; return self[i] end
-            }),
-            nested_debug = setmetatable({} :: any, {
-                __index = function(self, i: number) self[i] = {}; return self[i] end
-            }),
+            }) :: any,
+            nested_debug = setmetatable({}, {
+                __index = function(self, i) self[i] = {}; return self[i] end
+            }) :: any,
             nested_stack = {}
         }
     end
@@ -120,7 +120,7 @@ local function apply<T>(instance: T & Instance, properties: { [unknown]: unknown
     repeat
         process_properties(properties, instance, caches, depth)
         depth = table.remove(nested_stack) :: number
-        properties = table.remove(nested_stack) :: {}
+        properties = table.remove(nested_stack) :: { [unknown]: unknown }
     until not properties
 
     for i = 1, #events, 2 do
@@ -129,8 +129,8 @@ local function apply<T>(instance: T & Instance, properties: { [unknown]: unknown
         ;(instance :: any)[event_name]:Connect(event_listener)
     end
 
-    for _, queued in next, actions do
-        for _, callback in next, queued do
+    for _, queued in actions do
+        for _, callback in queued do
             callback(instance)
         end
     end
@@ -144,7 +144,7 @@ local function apply<T>(instance: T & Instance, properties: { [unknown]: unknown
     end
 
     table.clear(events)
-    for _, queued in next, actions do table.clear(queued) end
+    for _, queued in actions do table.clear(queued) end
     if flags.strict then table.clear(nested_debug) end
     table.clear(nested_stack)
 

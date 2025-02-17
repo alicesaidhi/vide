@@ -1,6 +1,6 @@
 type Action = {
-    priority: number,
-    callback: (Instance) -> ()
+    read priority: number,
+    read callback: (Instance) -> ()
 }
 
 local ActionMT = table.freeze {}

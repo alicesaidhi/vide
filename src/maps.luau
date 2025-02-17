@@ -14,10 +14,10 @@ local destroy = graph.destroy
 
 type Map<K, V> = { [K]: V }
 
-local function check_primitives(t: {})
+local function check_primitives(t: { [any]: any })
     if not flags.strict then return end
 
-    for _, v in next, t do
+    for _, v in t do
         if type(v) == "table" or type(v) == "userdata" or type(v) == "function" then continue end
         error("table source map cannot return primitives", 0)
     end
@@ -35,14 +35,14 @@ local function indexes<K, VI, VO>(input: () -> Map<K, VI>, transform: (() -> VI,
 
     local function update_children(data)
         -- queue removed values
-        for i in next, input_cache do
+        for i in input_cache do
             if data[i] == nil then
                 table.insert(remove_queue, i)
             end
         end
 
         -- remove queued values
-        for _, i in next, remove_queue do
+        for _, i in remove_queue do
             destroy(scopes[i])
 
             input_cache[i] = nil
@@ -56,14 +56,14 @@ local function indexes<K, VI, VO>(input: () -> Map<K, VI>, transform: (() -> VI,
         push_scope(subowner)
 
         -- process new or changed values
-        for i, v in next, data do
+        for i, v in data do
             local cv = input_cache[i]
 
             if cv ~= v then
                 input_cache[i] = v
 
                 if cv == nil then -- create new scope and run transform
-                    local scope = create_node(subowner, false, false)
+                    local scope = create_node(subowner :: Node<any>, false, false)
                     scopes[i] = scope :: Node<any>
 
                     local node = create_source_node(v)
@@ -94,7 +94,7 @@ local function indexes<K, VI, VO>(input: () -> Map<K, VI>, transform: (() -> VI,
         pop_scope()
 
         local output_array = table.create(#scopes)
-        for _, v in next, output_cache do
+        for _, v in output_cache do
             table.insert(output_array, v)
         end
         check_primitives(output_array)
@@ -129,7 +129,7 @@ local function values<K, VI, VO>(input: () -> Map<K, VI>, transform: (VI, () -> 
 
         if flags.strict then
             local cache = {}
-            for _, v in next, data do
+            for _, v in data do
                 if cache[v] ~= nil then
                     error "duplicate table value detected"
                 end
@@ -140,13 +140,13 @@ local function values<K, VI, VO>(input: () -> Map<K, VI>, transform: (VI, () -> 
         push_scope(subowner)
     
         -- process data
-        for i, v in next, data do
+        for i, v in data do
             new_input_cache[v] = i
 
             local cv = cur_input_cache[v]
             
             if cv == nil then -- create new scope and run transform
-                local scope = create_node(subowner, false, false)
+                local scope = create_node(subowner :: Node<any>, false, false)
                 scopes[v] = scope :: Node<any>
 
                 local node = create_source_node(i)
@@ -180,7 +180,7 @@ local function values<K, VI, VO>(input: () -> Map<K, VI>, transform: (VI, () -> 
         pop_scope()
 
         -- remove old values
-        for v in next, cur_input_cache do
+        for v in cur_input_cache do
             destroy(scopes[v])
 
             output_cache[v] = nil
@@ -193,7 +193,7 @@ local function values<K, VI, VO>(input: () -> Map<K, VI>, transform: (VI, () -> 
         cur_input_cache_up, new_input_cache_up = new_input_cache, cur_input_cache
 
         local output_array = table.create(#scopes)
-        for _, v in next, output_cache do
+        for _, v in output_cache do
             table.insert(output_array, v)
         end
         check_primitives(output_array)

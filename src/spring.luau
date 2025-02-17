@@ -83,7 +83,7 @@ local vec6_to_type = {
     end :: Vec6ToType<number>,
 
     CFrame = function(a, b)
-        return CFrame.new(a) * CFrame.fromEulerAnglesXYZ(b.X, b.Y, b.Z)
+        return CFrame.new(a) * CFrame.fromEulerAnglesXYZ(b.x, b.y, b.z)
     end :: Vec6ToType<CFrame>,
 
     Color3 = function(v)
@@ -225,7 +225,7 @@ local function spring<T>(source: () -> T, period: number?, damping_ratio: number
 end
 
 local function step_springs(dt: number)
-    for data in next, springs do
+    for data in springs do
         local k, c,
         x0_123, x1_123, u_123,
         x0_456, x1_456, u_456 =

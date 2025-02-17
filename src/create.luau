@@ -4,7 +4,7 @@ local Instance = game and Instance or require "../test/mock".Instance :: never
 local defaults = require "./defaults"
 local apply = require "./apply"
 
-local ctor_cache = {} :: { [string]: () -> Instance }
+local ctor_cache = {} :: { [string]: (Props) -> Instance }
 
 setmetatable(ctor_cache :: any, {
     __index = function(self, class)
@@ -13,7 +13,7 @@ setmetatable(ctor_cache :: any, {
 
         local default: { [string]: unknown }? = defaults[class]
         if default then
-            for i, v in next, default do
+            for i, v in default do
                 (instance :: any)[i] = v
             end
         end

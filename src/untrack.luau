@@ -12,7 +12,7 @@ local function untrack<T>(source: () -> T): T
 
         local ok, result = xpcall(source, debug.traceback)
 
-        scope.effect = effect :: () -> ()
+        scope.effect = effect :: (unknown) -> unknown
 
         if not ok then error(result, 0) end
 

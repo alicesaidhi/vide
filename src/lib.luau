@@ -95,7 +95,7 @@ local vide = {
 }
 
 setmetatable(vide :: any, {
-    __index = function(_, index: unknown): ()
+    __index = function<T>(_, index: keyof<typeof(flags)>): index<typeof(flags), T>
         if flags[index] == nil then
             error(`{tostring(index)} is not a valid member of vide`, 0)
         else
@@ -103,7 +103,7 @@ setmetatable(vide :: any, {
         end
     end,
 
-    __newindex = function(_, index: unknown, value: unknown)
+    __newindex = function<T>(_, index: T & keyof<typeof(flags)>, value: index<typeof(flags), T>)
         if flags[index] == nil then
             error(`{tostring(index)} is not a valid member of vide, 0`)
         else

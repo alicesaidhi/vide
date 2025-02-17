@@ -45,7 +45,7 @@ local function update_children_effect(p: {
                 cur_children_set[child] = nil -- remove child from cache if it was already in cache
             end  
         elseif type(child) == "table" then
-            for _, child in next, child do
+            for _, child in child do
                 process_child(child)
             end
         elseif type(child) == "function" then
@@ -68,7 +68,7 @@ local function update_children_effect(p: {
 
     process_child(new_children)
 
-    for child in next, cur_children_set do
+    for child in cur_children_set do
         child.Parent = nil -- unparent all children that weren't in the new children set
     end
 

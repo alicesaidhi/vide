@@ -23,24 +23,26 @@ local function context<T>(...: T): Context<T>
 
         if select("#", ...) == 0 then -- get
             while scope do
-                local ctx = scope.context
+                assert(scope)
+                local actal_scope: Node<unknown> = scope
+                local ctx = actal_scope.context
     
                 if not ctx then
-                    scope = scope.owner
+                    scope = actal_scope.owner
                     continue
                 end
 
-                local value = (ctx :: { unknown })[id]
+                local value = (ctx :: { any })[id]
 
                 if value == nil then
-                    scope = scope.owner
+                    scope = actal_scope.owner
                     continue
                 end
                 
                 return (if value ~= nil_symbol then value else nil) :: T
             end
 
-            if has_default ~= nil then
+            if has_default then
                 return default_value
             else
                 error("attempt to get context when no context is set and no default context is set", 0)

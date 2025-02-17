@@ -16,7 +16,7 @@ local function root<T...>(fn: (destroy: () -> ()) -> T...): (() -> (), T...)
         if not refs[node] then error "root already destroyed" end
         refs[node] = nil
         destroy(node)
-    end
+    end :: () -> ()
 
     push_scope(node)
 

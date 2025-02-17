@@ -74,7 +74,7 @@ local Instance = {} :: any do
     local function deep_clone<T>(template: T & {}): T
         local t = table.clone(template :: {}) :: {}
 
-        for i, v in next, t do
+        for i, v in t do
             if type(v) == "table" then
                 t[i] = deep_clone(v)
             end
@@ -172,7 +172,7 @@ local Instance = {} :: any do
         local clone_userdata = (Instance.new("") :: any) :: userdata
         local clone_data = get_data(clone_userdata)
 
-        for i, v in next, deep_clone(data) do
+        for i, v in deep_clone(data) do
             clone_data[i] = v
         end
 
@@ -193,7 +193,7 @@ local Instance = {} :: any do
         local children = get_data(userdata).children
         local userdatas = table.create(#children)
 
-        for i, child in next, children do
+        for i, child in children do
             userdatas[i] = get_proxy(child)
         end
 
