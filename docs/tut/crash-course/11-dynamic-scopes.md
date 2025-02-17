@@ -14,6 +14,8 @@ The simplest example is using `show()`.
 
 ::: luau-sandbox {template=vanilla-ts}
 <<< @/public/index.ts{#hidden}
+<<< @/public/cart.wasm{#hidden}
+<<< @/public/bundle.luau{#hidden}
 
 ```luau /app.luau [active]
 local source = vide.source

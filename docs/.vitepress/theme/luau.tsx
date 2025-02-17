@@ -17,7 +17,8 @@ export default defineComponent({
         
         options={{
           showLineNumbers: true,
-          externalResources: ['http://localhost:5173/vide/cart.wasm']
+          infiniteLoopProtection: false,
+          externalResources: ["https://github.com/lodinukal/cart/releases/download/v0.1.4/cart.wasm"]
         }}
         customSetup={{
           deps: {

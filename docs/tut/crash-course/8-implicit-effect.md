@@ -9,6 +9,8 @@ Explicitly creating effects to update properties is tedious. You can
 
 ::: luau-sandbox {template=vanilla-ts}
 <<< @/public/index.ts{#hidden}
+<<< @/public/cart.wasm{#hidden}
+<<< @/public/bundle.luau{#hidden}
 
 ```luau /app.luau [active]
 local create = vide.create
@@ -38,6 +40,8 @@ return vide.mount(Counter, create "ScreenGui" {})
 
 ::: luau-sandbox {template=vanilla-ts}
 <<< @/public/index.ts{#hidden}
+<<< @/public/cart.wasm{#hidden}
+<<< @/public/bundle.luau{#hidden}
 
 ```luau /app.luau [active]
 local create = vide.create
@@ -80,6 +84,8 @@ parent new instances on source update.
 
 ::: luau-sandbox {template=vanilla-ts}
 <<< @/public/index.ts{#hidden}
+<<< @/public/cart.wasm{#hidden}
+<<< @/public/bundle.luau{#hidden}
 
 ```luau /app.luau [active]
 local task = require("@cart/task")

@@ -2,6 +2,8 @@
 
 ::: luau-sandbox {template=vanilla-ts}
 <<< @/public/index.ts{#hidden}
+<<< @/public/cart.wasm{#hidden}
+<<< @/public/bundle.luau{#hidden}
 
 ```luau /app.luau [active]
 local create = vide.create
