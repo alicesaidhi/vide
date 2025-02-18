@@ -413,7 +413,16 @@ type function getvideproperties(instance, instancetype)
 	
 				properties[key] = { read = type }
 			elseif is_a_signal and value.read:is("class") then -- roblox-studio
-	
+				local connect_fn = is_a_signal
+				local params = connect_fn:parameters()
+				table.remove(params.head, 1)
+
+				local type = types.unionof(
+					nil_type,
+					types.newfunction(params)
+				)
+
+				properties[key] = { read = type }
 			elseif value.read:is("function") or value.read:is("intersection") then
 				continue
 			elseif value.write then
