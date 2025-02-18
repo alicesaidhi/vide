@@ -3,10 +3,13 @@ version = "0.4.0"
 description = "Unofficial fork of vide for the new type solver. Comes with instance types!"
 authors = ["centau"]
 repository = "https://github.com/centau/vide"
+includes = ["LICENSE.md", "README.md", "src", "pesde.toml"]
 license = "MIT"
 
 [target]
 environment = "roblox"
+build_files = ["src"]
+lib = "/src/init.luau"
 
 [scripts]
 roblox_sync_config_generator = ".pesde/roblox_sync_config_generator.luau"
