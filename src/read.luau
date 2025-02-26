@@ -1,6 +1,7 @@
 type function CastIntoValue(value)
-    if value:is("function") then
-        local values = value:returns()
+
+    local function get_return_for_fn(t)
+        local values = t:returns()
         local head = values.head
         local tail = values.tail
 
@@ -10,8 +11,25 @@ type function CastIntoValue(value)
         elseif tail then
             return tail
         else
-            error("function does not return any value")
+            return types.singleton(nil)
         end
+    end
+
+    if value.tag == "union" then
+        local components = value:components()
+        local possible_outcomes = {}
+
+        for _, v in components do
+            if v.tag == "function" then
+                table.insert(possible_outcomes, get_return_for_fn(v))
+            else
+                table.insert(possible_outcomes, v)
+            end
+        end
+
+        return types.unionof(unpack(possible_outcomes))
+    elseif value.tag == "function" then
+        return get_return_for_fn(value)
     else
         return value
     end

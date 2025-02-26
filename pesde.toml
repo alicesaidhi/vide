@@ -1,9 +1,9 @@
 name = "alicesaidhi/vide"
-version = "0.4.1-test.0"
+version = "0.4.1-test.1"
 description = "Unofficial fork of vide for the new type solver. Comes with instance types!"
 authors = ["centau"]
 repository = "https://github.com/centau/vide"
-includes = ["LICENSE.md", "README.md", "src", "pesde.toml"]
+includes = ["LICENSE.md", "README.md", "src/**", "pesde.toml"]
 license = "MIT"
 
 [target]
