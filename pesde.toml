@@ -1,5 +1,5 @@
 name = "alicesaidhi/vide"
-version = "0.4.1-test.1"
+version = "0.4.1-test.2"
 description = "Unofficial fork of vide for the new type solver. Comes with instance types!"
 authors = ["centau"]
 repository = "https://github.com/centau/vide"
