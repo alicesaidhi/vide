@@ -19,6 +19,7 @@ local spring, update_springs = require "./spring"()
 local action = require "./action"()
 local changed = require "./changed"
 local flags = require "./flags"
+local sibling = require "./sibling"
 
 export type Source<T> = source.Source<T>
 export type source<T> = Source<T>
@@ -146,6 +147,7 @@ local vide = {
     read = read,
     batch = batch,
     context = context,
+    sibling = sibling,
 
     -- animations
     spring = spring,
