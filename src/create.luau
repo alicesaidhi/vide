@@ -379,7 +379,18 @@ type Instances = {
 	Wire: Wire,
 }
 
-type function getvideproperties(instance, instancetype)
+type function getvideproperties(instancename, instances, instancetype)
+	local instance
+	if instancename:is("string") or instancename:is("generic") then return types.never end
+
+	for key, value in instances:properties() do
+		if key:value() == instancename:value() then
+			instance = value.read
+		end
+	end
+
+
+	if instance == types.never then return types.never end
 	local properties = {}
 	local nil_type = types.singleton(nil)
 
@@ -398,7 +409,6 @@ type function getvideproperties(instance, instancetype)
 	end
 
 	local function insert(object)
-		if object:parent() == nil then return end
 		for key, value in object:properties() do
 			local is_a_signal = is_signal(value.read)
 			if is_a_signal and value.read:is("table") then -- luau-lsp
@@ -439,7 +449,8 @@ type function getvideproperties(instance, instancetype)
 			end
 		end
 
-		insert(object:parent())
+		if object:readparent() == nil then return end
+		insert(object:readparent())
 	end
 	insert(instance)
 
@@ -472,16 +483,21 @@ end
 
 type function getvideinstance(instancename, instances, instancetype)
 	-- assert(instancename:is("generic") == false, "received generic")
-	if instancename:is("string") or instancename:is("generic") then return instancetype end
+	print(instancename.tag)
+	if instancename:is("string") or instancename:is("generic") then return types.never end
 
+	print(instancename:value())
 	for key, value in instances:properties() do
-		if key:value() == instancename:value() then return value.read end
+		if key:value() == instancename:value() then
+			print(key)
+			return value.read
+		end
 	end
 
-	return instancetype
+	return types.never
 end
 
 local c = (create :: any) ::
-	<T>(keyof<Instances> & T) -> (getvideproperties<getvideinstance<T, Instances, Instance>, Instance>) -> getvideinstance<T, Instances, Instance>
+	<T>(keyof<Instances> & T) -> (getvideproperties<T, Instances, Instance>) -> getvideinstance<T, Instances, Instance>
 
 return c
