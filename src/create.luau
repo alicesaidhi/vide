@@ -487,7 +487,6 @@ type function getvideinstance(instancename, instances, instancetype)
 
 	for key, value in instances:properties() do
 		if key:value() == instancename:value() then
-			print(key)
 			return value.read
 		end
 	end
