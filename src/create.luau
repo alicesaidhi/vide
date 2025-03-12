@@ -483,10 +483,8 @@ end
 
 type function getvideinstance(instancename, instances, instancetype)
 	-- assert(instancename:is("generic") == false, "received generic")
-	print(instancename.tag)
 	if instancename:is("string") or instancename:is("generic") then return types.never end
 
-	print(instancename:value())
 	for key, value in instances:properties() do
 		if key:value() == instancename:value() then
 			print(key)
