@@ -16,8 +16,8 @@ export default defineComponent({
         {...props}
         
         options={{
-          showLineNumbers: true,
-          externalResources: []
+          infiniteLoopProtection: false,
+          externalResources: ["https://github.com/lodinukal/cart/releases/download/v0.1.4/cart.wasm"]
         }}
         customSetup={{
           deps: {

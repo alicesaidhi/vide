@@ -1,16 +1,22 @@
 import { Cart, CartOptions, Memory, stdIo } from 'cart-luau';
 import file from "!raw-loader!/app.luau"
-import single from "!raw-loader!/vide.luau"
 import type { Inode } from "@bjorn3/browser_wasi_shim";
 import { File } from "@bjorn3/browser_wasi_shim";
-
 
 const shared_mem = new Memory();
 let cart: Cart;
 
 async function run() {
+    const frame = await fetch("https://alicesaidhi.github.io/vide/frame.luau");
+    const datatypes = await fetch("https://alicesaidhi.github.io/vide/datatypes.luau");
+    const instance = await fetch("https://alicesaidhi.github.io/vide/instance.luau");
+    const vide = await fetch("https://alicesaidhi.github.io/vide/vide.luau");
+    document.body.style = "min-width: 100vw; min-height: 100vh; width: 100vw; height: 100vh;"
 
     const fs = new Map<string, Inode>();
+    const text = (await instance.text()) + "\n" + (await datatypes.text()) + "\n" + (await frame.text()) + "\n" + (await vide.text()) + "\n"
+
+    console.log("added libraries")
 
     cart = new Cart(
         new CartOptions({
@@ -19,13 +25,13 @@ async function run() {
         })
     )
 
-    await cart.load("/vide/cart.wasm");
-    const thread = cart.loadThreadFromString("meow", single + "\n" + file);
+    await cart.load("https://alicesaidhi.github.io/vide/cart.wasm");
+    const thread = cart.loadThreadFromString("meow", text + file);
 
     if (!thread.valid) {
         throw new Error("Failed to load example");
     }
     await thread.execute();
-// }
+}
 
 run()

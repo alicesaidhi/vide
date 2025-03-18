@@ -16,6 +16,9 @@ hero:
       text: Tutorials
       link: /tut/crash-course/1-introduction
     - theme: alt
+      text: Crash Course
+      link: /tut/crash-course/2-creation
+    - theme: alt
       text: API Reference
       link: /api/reactivity-core
 
