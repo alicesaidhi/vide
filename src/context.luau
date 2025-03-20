@@ -1,10 +1,8 @@
 local graph = require "./graph"
 type Node<T> = graph.Node<T>
-local create_node = graph.create_node
+local create_stable_node = graph.create_stable_node
 local get_scope = graph.get_scope
-local push_scope = graph.push_scope
-local pop_scope = graph.pop_scope
-local set_context = graph.set_context
+local run_as = graph.run_as
 
 export type Context<T> = (() -> T) & (<U>(T, () -> U) -> U)
 
@@ -17,6 +15,7 @@ local function context<T>(...: T): Context<T>
 
     local has_default = select("#", ...) > 0
     local default_value = ...
+    local context: { [Node<any>]: T } = {}
 
     return function<T>(...): any -- todo: fix type error
         local scope: Node<unknown>? | false = get_scope()
@@ -25,17 +24,15 @@ local function context<T>(...: T): Context<T>
             while scope do
                 assert(scope)
                 local actal_scope: Node<unknown> = scope
-                local ctx = actal_scope.context
+                local value = context[actal_scope]
     
-                if not ctx then
-                    scope = actal_scope.owner
+                if not value then
+                    scope = actal_scope.parent
                     continue
                 end
 
-                local value = (ctx :: { any })[id]
-
                 if value == nil then
-                    scope = actal_scope.owner
+                    scope = actal_scope.parent
                     continue
                 end
                 
@@ -52,21 +49,18 @@ local function context<T>(...: T): Context<T>
 
             local value, component = ...
             
-            local new_scope = create_node(scope, false, false)
-            set_context(new_scope, id, if value == nil then nil_symbol else value)
-
-            push_scope(new_scope)
+            local new_scope = create_stable_node(scope, false, false)
+            context[new_scope] = if value == nil then nil_symbol else value
 
             local function efn(err: string) return debug.traceback(err, 3) end
-            local ok, result = xpcall(component, efn)
+            local result = run_as(new_scope, component, efn)
 
-            pop_scope()
-
-            if not ok then
+            if not result.ok then
                 error(`error while running context:\n\n{result}`, 0)
             end
 
-            return result
+            print(result.value)
+            return result.value
         end
 
         return nil :: any

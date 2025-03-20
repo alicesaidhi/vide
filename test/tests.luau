@@ -2106,109 +2106,110 @@ TEST("read()", wrap_root(function()
     end
 end))
 
--- TEST("context()", function()
---     local root = vide.root
---     local context = vide.context
---     local effect = vide.effect
---     local untrack = vide.untrack
---     local show = vide.show
+TEST("context()", function()
+    local root = vide.root
+    local context = vide.context
+    local effect = vide.effect
+    local untrack = vide.untrack
+    local show = vide.show
 
---     do CASE "set context"
---         local ctx = context()
+    do CASE "set context"
+        local ctx = context()
 
---         root(function()
---             ctx(1, function()
---                 CHECK(ctx() == 1)
+        root(function()
+            ctx(1, function()
+                CHECK(ctx() == 1)
 
---                 effect(function()
---                     CHECK(ctx() == 1)
---                 end)
---             end)
---         end)
---     end
+                effect(function()
+                    CHECK(ctx() == 1)
+                end)
+            end)
+        end)
+    end
 
---     do CASE "set context outside of scope"
---         local ctx = context()
+    do CASE "set context outside of scope"
+        local ctx = context()
 
---         local ok = pcall(function()
---             ctx(1, function() end)
---         end)
+        local ok = pcall(function()
+            ctx(1, function() end)
+        end)
         
---         CHECK(not ok)
---     end
+        CHECK(not ok)
+    end
 
---     do CASE "get default context"
---         local ctx = context(1)
+    do CASE "get default context"
+        local ctx = context(1)
 
---         CHECK(ctx() == 1)
+        CHECK(ctx() == 1)
 
---         root(function()
---             local v = ctx(2, function()
---                 CHECK(ctx() == 2)
---                 return ctx()
---             end)
+        root(function()
+            local v = ctx(2, function()
+                CHECK(ctx() == 2)
+                return ctx()
+            end)
 
---             CHECK(v == 2)
---             CHECK(ctx() == 1)
---         end)
---     end
+            print("ERROR ERROR", v)
+            CHECK(v == 2)
+            CHECK(ctx() == 1)
+        end)
+    end
 
---     do CASE "context cascade"
---         local ctx = context(1)
---         local ctx2 = context()
+    do CASE "context cascade"
+        local ctx = context(1)
+        local ctx2 = context()
 
---         root(function()
---             ctx(2, function()
---                 ctx2(true, function()
---                     show(function() return true end, function()
---                         ctx(3, function()
---                             effect(function()
---                                 CHECK(ctx() == 3)
---                                 untrack(function()
---                                     effect(function()
---                                         CHECK(ctx() == 3)
---                                     end)
---                                     CHECK(ctx2() == true)
---                                     return {}
---                                 end)
---                             end)
---                             CHECK(ctx() == 3)
---                         end)
---                         CHECK(ctx() == 2)
---                         return {}
---                     end)
---                 end)
---                 CHECK(ctx() == 2)
---             end)
+        root(function()
+            ctx(2, function()
+                ctx2(true, function()
+                    show(function() return true end, function()
+                        ctx(3, function()
+                            effect(function()
+                                CHECK(ctx() == 3)
+                                untrack(function()
+                                    effect(function()
+                                        CHECK(ctx() == 3)
+                                    end)
+                                    CHECK(ctx2() == true)
+                                    return {}
+                                end)
+                            end)
+                            CHECK(ctx() == 3)
+                        end)
+                        CHECK(ctx() == 2)
+                        return {}
+                    end)
+                end)
+                CHECK(ctx() == 2)
+            end)
 
---             CHECK(ctx() == 1)
---         end)
---     end
+            CHECK(ctx() == 1)
+        end)
+    end
 
---     do CASE "nil context"
---         local ctx = context(nil)
+    do CASE "nil context"
+        local ctx = context(nil)
 
---         root(function()
---             CHECK(ctx() == nil)
---             ctx(nil, function()
---                 CHECK(ctx() == nil)
---                 ctx(true :: any, function()
---                     CHECK(ctx() == true)
---                     ctx(nil, function()
---                         effect(function()
---                             untrack(function()
---                                 effect(function()
---                                     CHECK(ctx() == nil)
---                                 end)
---                                 return {}
---                             end)
---                         end)
---                     end)
---                 end)
---             end)
---         end)
---     end
--- end)
+        root(function()
+            CHECK(ctx() == nil)
+            ctx(nil, function()
+                CHECK(ctx() == nil)
+                ctx(true :: any, function()
+                    CHECK(ctx() == true)
+                    ctx(nil, function()
+                        effect(function()
+                            untrack(function()
+                                effect(function()
+                                    CHECK(ctx() == nil)
+                                end)
+                                return {}
+                            end)
+                        end)
+                    end)
+                end)
+            end)
+        end)
+    end
+end)
 
 TEST("nested effects cases", function()
     local source = vide.source
