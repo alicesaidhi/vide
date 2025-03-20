@@ -1,12 +1,12 @@
 local graph = require "./graph"
 type Node<T> = graph.Node<T>
 type SourceNode<T> = graph.SourceNode<T>
-local create_node = graph.create_node
+local create_reactive_node = graph.create_reactive_node
 local create_source_node = graph.create_source_node
-local assert_stable_scope = graph.assert_stable_scope
+local assert_stable_parent = graph.assert_stable_parent
 local evaluate_node = graph.evaluate_node
-local update_descendants = graph.update_descendants
-local push_child_to_scope = graph.push_child_to_scope
+local update_source_node = graph.update_source_node
+local push_dependency = graph.push_dependency
 
 local UPDATE_RATE = 120
 local TOLERANCE = 0.001
@@ -126,7 +126,7 @@ local springs: { [SpringState<unknown>]: SourceNode<unknown> } = {}
 setmetatable(springs :: any, { __mode = "v" })
 
 local function spring<T>(source: () -> T, period: number?, damping_ratio: number?): (() -> T, SpringSettings<T>)
-    local owner = assert_stable_scope()
+    local owner = assert_stable_parent()
 
     -- https://en.wikipedia.org/wiki/Damping
 
@@ -168,7 +168,7 @@ local function spring<T>(source: () -> T, period: number?, damping_ratio: number
         return value
     end
 
-    local updater = create_node(owner, updater_effect, false :: any)
+    local updater = create_reactive_node(owner, updater_effect, "deferred", false :: any)
 
     evaluate_node(updater)
 
@@ -176,7 +176,7 @@ local function spring<T>(source: () -> T, period: number?, damping_ratio: number
     data.x0_123, data.x0_456 = data.x1_123, data.x1_456
 
     -- set output to goal
-    output.cache = data.source_value
+    output.cached = data.source_value
 
     local setter = function(p)
         local x = p.position
@@ -202,8 +202,8 @@ local function spring<T>(source: () -> T, period: number?, damping_ratio: number
 
     return function(...)
         if select("#", ...) == 0 then -- no args were given
-            push_child_to_scope(output)
-            return output.cache
+            push_dependency(output)
+            return output.cached
         end
 
         -- set current position to value
@@ -218,7 +218,7 @@ local function spring<T>(source: () -> T, period: number?, damping_ratio: number
         springs[data] = output
 
         -- set output to value
-        output.cache = v
+        output.cached = v
 
         return v
     end, setter
@@ -280,12 +280,10 @@ local function update_spring_sources()
         if max_difference == TOLERANCE_VECTOR then
             -- close enough to target, unshedule spring and set value to target
             springs[data] = nil
-            output.cache = data.source_value
+            update_source_node(output, data.source_value)
         else
-            output.cache = vec6_to_type[typeof(data.source_value)](x0_123, x0_456)
+            update_source_node(output, vec6_to_type[typeof(data.source_value)](x0_123, x0_456))
         end
-
-        update_descendants(output)
     end
 end
 

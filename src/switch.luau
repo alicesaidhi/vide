@@ -1,19 +1,17 @@
 local graph = require "./graph"
 type Node<T> = graph.Node<T>
 type SourceNode<T> = graph.SourceNode<T>
-local create_node = graph.create_node
+local create_reactive_node = graph.create_reactive_node
+local create_stable_node = graph.create_stable_node
 local evaluate_node = graph.evaluate_node
-local push_child_to_scope = graph.push_child_to_scope
+local run_as = graph.run_as
 local destroy = graph.destroy
-local assert_stable_scope = graph.assert_stable_scope
-local push_scope = graph.push_scope
-local pop_scope = graph.pop_scope
+local assert_stable_parent = graph.assert_stable_parent
 
 type Map<K, V> = { [K]: V }
 
 local function switch<T, U>(source: () -> T): (map: Map<T, ((() -> U)?)>) -> () -> U?
-    local owner = assert_stable_scope()
-
+    local owner = assert_stable_parent()
     return function(map)
         local last_scope: Node<false>?
         local last_component: (() -> U)?
@@ -24,7 +22,7 @@ local function switch<T, U>(source: () -> T): (map: Map<T, ((() -> U)?)>) -> () 
             last_component = component
 
             if last_scope then
-                destroy(last_scope :: Node<any>)
+                destroy(last_scope)
                 last_scope = nil
             end
 
@@ -34,27 +32,21 @@ local function switch<T, U>(source: () -> T): (map: Map<T, ((() -> U)?)>) -> () 
                 error "map must map a value to a function"
             end
 
-            local new_scope = create_node(owner, false, false :: false)
-            last_scope = new_scope
-            
-            push_scope(new_scope)
-        
-            local ok, result = xpcall(component, debug.traceback)
+            local new_scope = create_stable_node(owner)
+            local result = run_as(new_scope, component)
+            last_scope = new_scope :: Node<false>
 
-            pop_scope()
+            if not result.ok then error(result, 0) end
 
-            if not ok then error(result, 0) end
-
-            return result
+            return result.value
         end
 
-        local node = create_node(owner, update, nil)
-
-        evaluate_node(node)
+        local node = create_reactive_node(owner, update, "lazy", nil)
 
         return function()
-            push_child_to_scope(node)
-            return node.cache
+            local result = evaluate_node(node)
+
+            return if result.ok then result.value else error(result, 0)
         end
     end
 end

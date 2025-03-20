@@ -21,7 +21,7 @@ local function cleanup(value: unknown)
 
     if not scope then
         error "cannot cleanup outside a stable or reactive scope"
-    end; assert(scope)
+    end
 
     if type(value) == "function" then
         push_cleanup(scope, value :: () -> ())

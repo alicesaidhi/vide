@@ -1,104 +1,153 @@
-local flags = require "./flags"
-
 export type SourceNode<T> = {
-    cache: T,
-    [number]: Node<T>
+    last_evaluation: number,
+    read effect: false,
+    --- The value that is currently cached
+    cached: T,
+
+    --- Other nodes that depend on the result of this node
+    [number]: ReactiveNode<T>
 }
 
-export type Node<T> =  {
-    cache: T,
-    effect:  ((T) -> T) | false,
-    cleanups: { () -> () } | false,
-
-    context: { [number]: any } | false,
-
-    owned: { Node<T> } | false,
-    owner: Node<T> | false,
-
-    parents: { SourceNode<T> },
-    [number]: Node<T> -- children
+export type StableNode<T> = {
+    --- The parent of this node.
+    read parent: Node<T> | false,
+    --- Describes the effect to run to compute the result of this node.
+    read effect: false,
+    read last_evaluation: number,
+    --- The value of this node
+    read cached: T,
+    --- Nodes that this node owns.
+    read children: { Node<T> },
+    --- Cleanup functions to call when this node dies
+    read cleanups: { () -> () },
 }
 
-local scopes = { n = 0 } :: { [number]: Node<any>, n: number } -- scopes stack
+export type ReactiveNode<T> = {
+    --- The parent of this node.
+    read parent: Node<T>,
+    --- Describes the effect to run to compute the result of this node.
+    read effect: (T) -> T,
+    read evaluation: "eager" | "deferred" | "lazy" | "dead",
+    last_evaluation: number,
+    --- A list of the values this node depends on
+    depending_on: { SourceNode<T> | ReactiveNode<T> },
+    --- Describes the current state of this node.
+    --- - clean: the cached result can be used immediately
+    --- - dirty: you need to recompute the node
+    --- - busy: the node is already being recomputed - throw an error!
+    --- - dead: the node is dead
+    state: "clean" | "dirty" | "busy" | "dead",
+    --- The value of this node
+    cached: T,
+    --- Nodes that this node owns.
+    read children: { Node<T> },
+    --- Cleanup functions to call when this node dies
+    read cleanups: { () -> () } | false,
 
-local function efn(err: string)
-    local trace = debug.traceback(err, 2)
+    --- Other nodes that depend on the result of this node.
+    [number]: ReactiveNode<T>
+}
 
-    if string.find(err, "^effect error stacktrace") then -- if effect error is nested
-        trace = string.gsub("    " .. trace, "\n", function() -- indent entire error
-            return "\n    "
-        end)
-    end
+export type Node<T> = ReactiveNode<T> | StableNode<T>
 
-    trace ..= "\nsource update stacktrace:"
-return trace
+local warn = warn or print
+
+local processing_node: Node<unknown> | false = false
+local deferred_nodes = {}
+local version = 0
+
+local function bump_version()
+    --print("bump version")
+    version += 1
+    return version
 end
 
-local function ycall<T, U>(fn: (T) -> U, arg: T): (boolean, string|U)
+type Result<OK, ERR=string> = {
+    ok: true,
+    value: OK
+} | {
+    ok: false,
+    err: ERR,
+    trace: string,
+}
 
-    local thread = coroutine.create(xpcall)
-    --local function efn(err: string) return debug.traceback(err, 3) end
-    local resume_ok, run_ok, result = coroutine.resume(thread, fn, efn, arg)
+-- * Result addendum
+local _result = { ok = false, value = nil, err = nil }
+local _result_mt = { __tostring = function(self) 
+    return `{self.err}\ntrace: {self.trace}`
+end }
 
-    assert(resume_ok)
-        
-    if coroutine.status(thread) ~= "dead" then
-        return false, debug.traceback(thread, "attempt to yield in reactive scope")
-    end
+setmetatable(_result, _result_mt)
 
-    return run_ok, result
+local function ok_result<OK>(value: OK): { ok: true, value: OK }
+    -- local _result = setmetatable({}, _result_mt)
+    _result.ok = true
+    _result.value = value
+    return _result :: any
 end
 
-local function get_scope(): Node<unknown>?
-    return scopes[scopes.n]
+local function fail_result<ERR>(value: ERR, trace: string): { ok: false, err: ERR, trace: string }
+    local _result = setmetatable({}, _result_mt)
+    _result.ok = false
+    _result.err = value
+    _result.trace = trace
+    return _result :: any
 end
 
-local function assert_stable_scope(): Node<unknown>
-    local scope = get_scope()
-
-    if not scope then
-        local caller_name = debug.info(2, "n")
-        return error(`cannot use {caller_name}() outside a stable or reactive scope`, 0)
-    elseif scope.effect then
-        error("cannot create a new reactive scope inside another reactive scope", 0)
-    end
-
-    return scope
-end
-
-local function push_child<T>(parent: SourceNode<any>, child: Node<any>)
-    table.insert(parent, child)
-    table.insert(child.parents, parent)
-end
-
-local function push_scope<T>(node: Node<T>)
-    local n = scopes.n + 1
-    scopes.n = n
-    scopes[n] = node
-end
-
-local function pop_scope()
-    local n = scopes.n
-    scopes.n = n - 1
-    scopes[n] = nil
-end
-
-local function push_cleanup<T>(node: Node<T>, cleanup: () -> ())
-    if node.cleanups then
-        table.insert(node.cleanups, cleanup)
+local function get_result<OK, T...>(fn: (T...) -> OK, ...: T...): Result<OK>
+    local ok, value: any = xpcall(fn, function(err: string)
+        local message = string.gsub(tostring(err), "^.+:%d+:%s*", "")
+        local trace = debug.traceback(nil, 2)
+        return {
+            message = message,
+		    trace = trace
+        }
+    end, ...)
+    if not ok then
+        return fail_result(value.message, value.trace)
     else
-        node.cleanups = { cleanup }
+        return ok_result(value)
     end
 end
+-- *
 
-local function flush_cleanups<T>(node: Node<T>)
-    if node.cleanups then
-        for _, fn in node.cleanups do
-            local ok, err: string? = xpcall(fn, debug.traceback)
-            if not ok then error(`cleanup error: {err}`, 0) end
-        end
+local function run_as<T, U...>(owner: Node<any> | false, fn: (U...) -> T, ...: U...): Result<T>
+    local previous_processing = processing_node
+    processing_node = owner
+    local result = get_result(fn, ...)
+    processing_node = previous_processing
+    return result
+end
 
-        table.clear(node.cleanups)
+local function run_as_unsafe<T, U...>(owner: Node<any> | false, fn: (U...) -> T, ...: U...): Result<T>
+    local previous_processing = processing_node
+    processing_node = owner
+    local result = fn(...)
+    processing_node = previous_processing
+    return result
+end
+
+local function assert_stable_parent<T>(): StableNode<T>
+    if not processing_node then
+        error(`cannot call {debug.info(2, "n")} without a parent scope`, 2)
+    elseif processing_node.effect ~= false then
+        error(`cannot call {debug.info(2, "n")} while the parent scope is reactive - this might be a component. consider using untrack() while creating the components.`, 2)
+    end
+
+    return processing_node :: StableNode<T>
+end
+
+local function defer_node<T>(node: ReactiveNode<T>)
+    if node.state == "dirty" then return end
+    node.state = "dirty" :: any
+    table.insert(deferred_nodes, node)
+end
+
+local function push_dependency<T>(node: SourceNode<T> | ReactiveNode<T>)
+    if processing_node and processing_node.effect then
+        if processing_node == node then error(`cannot add itself as dependency {node.effect}, {processing_node.effect}`) end
+        table.insert(node, processing_node)
+        table.insert(processing_node.depending_on, node)
     end
 end
 
@@ -109,209 +158,268 @@ local function find_and_swap_pop<T>(t: { T }, v: T)
     t[n] = nil
 end
 
-local function unparent<T>(node: Node<T>)
-    local parents = node.parents
+local function flush_cleanups<T>(node: Node<T>)
+    if node.cleanups then
+        for _, fn in next, node.cleanups do
+            local result = get_result(fn)
+            if not result.ok then error(`cleanup error: {result.err}`, 0) end
+        end
 
-    for i, parent in parents do
-        find_and_swap_pop(parent, node)
-        parents[i] = nil
+        table.clear(node.cleanups)
+    end
+end
+
+local function remove_dependencies<T>(node: Node<T>)
+    if node.effect then
+        for _, dependency in node.depending_on do
+            find_and_swap_pop(dependency, node)
+        end
+        table.clear(node.depending_on)
     end
 end
 
 local function destroy<T>(node: Node<T>)
-    if flags.strict and table.find(scopes, node) then
-        error("attempt to destroy an active scope", 0)
-    end
-
+    -- print("destroyed", node, debug.traceback())
+    -- node.cached = nil
     flush_cleanups(node)
-    unparent(node)
+    remove_dependencies(node)
     
-    if node.owner then
-        find_and_swap_pop(node.owner.owned :: { Node<T> }, node)
-        node.owner = false
+    for _, node: Node<T> in node.children do
+        destroy(node)
     end
-
-    if node.owned then
-        local owned = node.owned
-        while owned[1] do destroy(owned[1]) end
-    end
+    table.clear(node.children)
 end
 
 local function destroy_owned<T>(node: Node<T>)
-    if node.owned then
-        local owned = node.owned
-        while owned[1] do destroy(owned[1]) end
+    for _, node: Node<T> in node.children do
+        destroy(node)
     end
+    table.clear(node.children)
 end
 
-local update_queue = { n = 0 } :: { n: number, [number]: Node<any> }
+local function is_similar(a: unknown, b: unknown): boolean
+    return
+        if type(a) == "table" and type(b) == "table" and not table.isfrozen(a :: any) and not table.isfrozen(b :: any) then false
+        else a == b
+end
 
-local function evaluate_node<T>(node: Node<T>)
-    if flags.strict then
-        local initial_value = node.cache
+local function update_node<T>(node: ReactiveNode<T>): Result<T>
+    local previous_result = node.cached
+    local previous_processing = processing_node
 
-        for i = 1, 2 do
-            local cur_value = node.cache
+    flush_cleanups(node)
+    destroy_owned(node)
+    remove_dependencies(node)
 
-            flush_cleanups(node)
-            destroy_owned(node)
-    
-            push_scope(node)
-            local ok, new_value = ycall(node.effect :: (T) -> T, cur_value)
-            pop_scope()
-            
-            if not ok then
-                table.clear(update_queue)
-                update_queue.n = 0
-                error(`effect error stacktrace\n{new_value :: string}`, 0)
-            end
+    -- print("rerunning", debug.info(node.effect, "n"), previous_result, node)
 
-            node.cache = new_value :: T
+    processing_node = node
+    local result = get_result(node.effect, previous_result)
+    processing_node = previous_processing
+
+    if result.ok then
+        node.state = "clean" :: any --fixme: typechecking bug
+        push_dependency(node)
+
+        if node.evaluation ~= "eager" and is_similar(previous_result, result.value) then
+            -- print("DID NOT UPDATE BECAUSE SIMILAR AT", debug.info(node.effect, "sl"))
+            return ok_result(node.cached)
         end
+        -- print("UPDATE BECAUSE NOT SIMILAR AT", debug.info(node.effect, "sl"))
 
-        return initial_value ~= node.cache
+        node.last_evaluation = bump_version()
+        node.cached = result.value
+
+        return ok_result(node.cached)
     else
-        local cur_value = node.cache
-
-        flush_cleanups(node)
-        destroy_owned(node)
-
-        push_scope(node)
-        local ok, new_value = pcall(node.effect :: (T) -> T, node.cache)
-        pop_scope()
-
-        if not ok then
-            table.clear(update_queue)
-            update_queue.n = 0
-            error(`effect error:\n{new_value}\n`, 0)
-        end
-    
-        node.cache = new_value
-        return cur_value ~= new_value
+        warn(`effect error: {result}`)
+        return fail_result(`effect error: {result.err}`, result.trace)
     end
 end
 
-local function queue_children_for_update<T>(node: SourceNode<T>)
-    local i = update_queue.n
-    while node[1] do
-        i += 1
-        update_queue[i] = node[1]
-        unparent(node[1])
+
+local function is_dirty<T>(node: ReactiveNode<T>)
+    local last_evaluation = node.last_evaluation
+
+    if node.state == "clean" then
+        return false
     end
-    update_queue.n = i
-end
 
-local function get_update_queue_length()
-    return update_queue.n
-end
-
-local function flush_update_queue(from: number)
-    local i = from + 1
-    while i <= update_queue.n do
-        local node = update_queue[i]
-        --assert(node.effect)
-
-        if node.owner and evaluate_node(node) then
-            queue_children_for_update(node)
+    for _, dependency in node.depending_on do
+        -- if a dependent was evaluated after this node was evaluated, it's dirty
+        if dependency.effect and dependency.state == "dirty" then
+            -- make sure the dependency isn't dirty
+            update_node(dependency)
         end
 
-        update_queue[i] = false :: any
-        i += 1
-    end
-    
-    update_queue.n = from
-end
-
-local function update_descendants<T>(root: SourceNode<T>)
-    local n0 = update_queue.n
-    queue_children_for_update(root)
-
-    if flags.batch then return end
-
-    local i = n0 + 1
-    while i <= update_queue.n do
-        local node = update_queue[i]
-        --assert(node.effect)
-
-        -- check if node is still owned in case destroyed after queued
-        if node.owner and evaluate_node(node) then
-            queue_children_for_update(node)
-        end
-
-        update_queue[i] = false :: any -- false instead of nil to avoid sparse
-        i += 1
+        if dependency.last_evaluation > last_evaluation then
+            return true
+        end 
     end
 
-    update_queue.n = n0
+    return #node.depending_on == 0
 end
 
-local function push_child_to_scope<T>(node: SourceNode<T>)
-    local scope = get_scope()
-    if scope and scope.effect then -- do not track nodes with no effect
-        push_child(node, scope)
+
+local function evaluate_node<T>(node: SourceNode<T> | ReactiveNode<T>): Result<T>
+    if node.effect == false or node.state == "clean" then
+        push_dependency(node :: SourceNode<T> | ReactiveNode<T>)
+
+        return ok_result(node.cached)
+    elseif node.state == "busy" then
+        return fail_result(`this creates a recursive dependency, which can result in creating a infinite loop.`, debug.traceback(nil, 2))
+    elseif node.state == "dead" then
+        return ok_result(node.cached)
+    elseif is_dirty(node) then
+        return update_node(node)
+    else
+        node.state = "clean" :: any
+        return ok_result(node.cached)
     end
 end
 
-local function create_node<T>(owner: false | Node<any>, effect: false | (T) -> T, value: T): Node<T>
-    local node: Node<T> = {
-        cache = value,
-        effect = effect,
-        cleanups = false,
+local function flush_deferred_nodes()
+    for _, node in deferred_nodes do
+        local result = evaluate_node(node)
 
-        context = false,
+        if result.ok == false then warn(`deferred node error: {result}`) end
+    end
+    table.clear(deferred_nodes)
+end
 
-        owner = owner,
-        owned = false,
-
-        parents = {},
-    }
-
-    if owner then
-        if owner.owned then
-            table.insert(owner.owned, node)
+local _pending_eval: { ReactiveNode<unknown> } = {}
+local function invalidate_loop<T>(node: SourceNode<T> | ReactiveNode<T>)
+    if node.state == "dirty" then return end
+    for _, value in ipairs(node) do
+        if value.evaluation == "eager" then -- append it to a queue so it can be evaluated after all nodes are marked dirty.
+            invalidate_loop(value)
+            value.state = "dirty"
+            table.insert(_pending_eval, value)
+        elseif value.evaluation == "deferred" then
+            invalidate_loop(value)
+            defer_node(value)
         else
-            owner.owned = { node }
+            invalidate_loop(value)
+            value.state = "dirty"
         end
+    end
+end
+
+local function invalidate<T>(node: SourceNode<T>)
+    invalidate_loop(node)
+
+    for _, node in _pending_eval do
+            -- print("CHECKING", count(node.depending_on), "DEPENDENCIES FOR", debug.info(node.effect, "sl"))
+        for _, dependent in node.depending_on do
+            -- print("CHECKING", dependent.last_evaluation > node.last_evaluation, dependent.effect and `{debug.info(dependent.effect, "s")}:{debug.info(dependent.effect, "l")}`)
+            run_as_unsafe(false, evaluate_node, dependent)
+            -- print("checked", dependent.state, dependent.last_evaluation > node.last_evaluation, `{debug.info(dependent.effect, "s")}:{debug.info(dependent.effect, "l")}`)
+        end
+
+        -- print("EVALUATING NODE", is_dirty(node))
+        run_as_unsafe(false, evaluate_node, node)
+    end
+    table.clear(_pending_eval)
+end
+
+local function create_reactive_node<T>(parent: StableNode<T> | false, effect: (T) -> T, evaluation: "eager" | "deferred" | "lazy", cached: T?)
+    local node = {
+        parent = parent,
+        last_evaluation = bump_version(),
+        
+        effect = effect,
+        evaluation = evaluation,
+        state = "dirty",
+        cached = cached,
+        depending_on = {},
+
+        children = {} :: { Node<T> },
+        cleanups = {}
+    } :: ReactiveNode<T>
+
+    if parent then table.insert(parent.children, node) end
+
+    if evaluation == "deferred" then
+        table.insert(deferred_nodes, node)
     end
 
     return node
 end
 
+local function create_stable_node<T>(parent: Node<T> | false)
+    local node = {
+        parent = parent,
+        last_evaluation = bump_version(),
+
+        effect = false,
+
+        children = table.create(1),
+        cleanups = table.create(1)
+    } :: StableNode<T>
+    
+    if parent then
+        table.insert(parent.children, node)
+    end
+    
+    return node
+end
+
 local function create_source_node<T>(value: T): SourceNode<T>
-    return { cache = value }
+    local node = {
+        last_evaluation = bump_version(),
+        effect = false,
+        cached = value
+    } :: SourceNode<T>
+
+    return node
 end
 
-local function get_children<T>(node: Node<T>): { Node<unknown> }
-    return { unpack(node) } :: { Node<any> }
+local function update_source_node<T>(node: SourceNode<T>, value: T)
+    if is_similar(node.cached, value) then return end
+    node.last_evaluation = bump_version()
+    node.cached = value
+    invalidate(node)
 end
 
-local function set_context<T>(node: Node<T>, key: number, value: unknown)
-    if node.context then
-        node.context[key] = value
+local function get_scope<T>(): Node<T> | false
+    return processing_node
+end
+
+local function push_cleanup<T>(scope: Node<T>, cleanup: () -> ())
+    if scope.cleanups == false then
+        scope.cleanups = { cleanup } :: any --fixme: type error
     else
-        node.context = { [key] = value }
+        table.insert(scope.cleanups, cleanup)
     end
 end
 
-return table.freeze {
-    push_scope = push_scope,
-    pop_scope = pop_scope,
-    evaluate_node = evaluate_node,
-    get_scope = get_scope,
-    assert_stable_scope = assert_stable_scope,
-    push_cleanup = push_cleanup,
-    destroy = destroy,
-    flush_cleanups = flush_cleanups,
-    push_child_to_scope = push_child_to_scope,
-    update_descendants = update_descendants,
-    push_child = push_child,
-    create_node = create_node,
+return {
+    update_source_node = update_source_node,
     create_source_node = create_source_node,
-    get_children = get_children,
-    flush_update_queue = flush_update_queue,
-    get_update_queue_length = get_update_queue_length,
-    set_context = set_context,
-    scopes = scopes,
+    create_stable_node = create_stable_node,
+    create_reactive_node = create_reactive_node,
 
-    q = update_queue
+    invalidate = invalidate,
+    flush_deferred_nodes = flush_deferred_nodes,
+
+    evaluate_node = evaluate_node,
+    push_dependency = push_dependency,
+    get_result = get_result,
+    is_similar = is_similar,
+
+    destroy_owned = destroy_owned,
+    destroy = destroy,
+
+    is_dirty = is_dirty,
+    assert_stable_parent = assert_stable_parent,
+    get_scope = get_scope,
+
+    run_as = run_as,
+    run_as_unsafe = run_as_unsafe,
+
+    push_cleanup = push_cleanup,
+
+    get_children = function<T>(node: ReactiveNode<T> | StableNode<T>)
+        return { unpack(node) }
+    end
 }

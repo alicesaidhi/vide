@@ -1,7 +1,7 @@
 local graph = require "./graph"
 type Node<T> = graph.Node<T>
-local create_node = graph.create_node
-local assert_stable_scope = graph.assert_stable_scope
+local create_reactive_node = graph.create_reactive_node
+local assert_stable_parent = graph.assert_stable_parent
 local get_scope = graph.get_scope
 local evaluate_node = graph.evaluate_node
 local push_cleanup = graph.push_cleanup
@@ -45,11 +45,11 @@ local function update_children_effect(p: {
                 cur_children_set[child] = nil -- remove child from cache if it was already in cache
             end  
         elseif type(child) == "table" then
-            for _, child in child do
+            for _, child in next, child do
                 process_child(child)
             end
         elseif type(child) == "function" then
-            local node = create_node(assert(get_scope()), update_children_effect, {
+            local node = create_reactive_node(assert(get_scope()), update_children_effect, "deferred", {
                 instance = p.instance,
                 cur_children_set = {},
                 new_children_set = {},
@@ -59,7 +59,7 @@ local function update_children_effect(p: {
             evaluate_node(node)
 
             push_cleanup(assert(get_scope()), function()
-                for child in node.cache.cur_children_set do
+                for child in node.cached.cur_children_set do
                     child.Parent = nil
                 end
             end)
@@ -68,7 +68,7 @@ local function update_children_effect(p: {
 
     process_child(new_children)
 
-    for child in cur_children_set do
+    for child in next, cur_children_set do
         child.Parent = nil -- unparent all children that weren't in the new children set
     end
 
@@ -80,7 +80,7 @@ end
 
 return {
     property = function(instance, property, source)
-        local node = create_node(assert_stable_scope(), update_property_effect, {
+        local node = create_reactive_node(assert_stable_parent(), update_property_effect, "deferred", {
             instance = instance,
             property = property,
             source = source
@@ -90,7 +90,7 @@ return {
     end,
 
     parent = function(instance, parent)
-        local node = create_node(assert_stable_scope(), update_parent_effect, {
+        local node = create_reactive_node(assert_stable_parent(), update_parent_effect, "eager", {
             instance = instance,
             source = parent
         })
@@ -99,7 +99,7 @@ return {
     end,
 
     children = function(instance, children)
-        local node = create_node(assert_stable_scope(), update_children_effect, {
+        local node = create_reactive_node(assert_stable_parent(), update_children_effect, "deferred", {
             instance = instance,
             cur_children_set = {},
             new_children_set = {},
@@ -108,8 +108,8 @@ return {
 
         evaluate_node(node)
 
-        push_cleanup(assert_stable_scope(), function()
-            for child in node.cache.cur_children_set do
+        push_cleanup(assert_stable_parent(), function()
+            for child in node.cached.cur_children_set do
                 child.Parent = nil
             end
         end)

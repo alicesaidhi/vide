@@ -2,15 +2,16 @@ local flags = require "./flags"
 local graph = require "./graph"
 type Node<T> = graph.Node<T>
 type SourceNode<T> = graph.SourceNode<T>
-local create_node = graph.create_node
+local create_reactive_node = graph.create_reactive_node
+local create_stable_node = graph.create_stable_node
 local create_source_node = graph.create_source_node
-local push_child_to_scope = graph.push_child_to_scope
-local update_descendants = graph.update_descendants
-local assert_stable_scope = graph.assert_stable_scope
-local push_scope = graph.push_scope
-local pop_scope = graph.pop_scope
+local assert_stable_parent = graph.assert_stable_parent
+local update_source_node = graph.update_source_node
 local evaluate_node = graph.evaluate_node
+local push_dependency = graph.push_dependency
 local destroy = graph.destroy
+local run_as = graph.run_as
+local run_as_unsafe = graph.run_as_unsafe
 
 type Map<K, V> = { [K]: V }
 
@@ -24,14 +25,45 @@ local function check_primitives(t: { [any]: any })
 end
 
 local function indexes<K, VI, VO>(input: () -> Map<K, VI>, transform: (() -> VI, K) -> VO): () -> { VO }
-    local owner = assert_stable_scope()
-    local subowner = create_node(owner, false, false)
+    local owner = assert_stable_parent()
+    local subowner = create_stable_node(owner)
 
-    local input_cache = {} :: Map<K, VI>
+    local input_cache = {} :: Map<K, VI?>
     local output_cache = {} :: Map<K, VO>
     local input_nodes = {} :: Map<K, SourceNode<VI>>
     local remove_queue = {} :: { K }
     local scopes = {} :: Map<K, Node<unknown>>
+
+    local function update(data)
+        for i, v in data do
+            local cv = input_cache[i]
+
+            if cv ~= v then
+                input_cache[i] = v
+
+                if cv == nil then -- create new scope and run transform
+                    local scope = create_stable_node(subowner :: Node<any>, false, false)
+                    scopes[i] = scope :: Node<any>
+
+                    local node = create_source_node(v)
+
+                    local result = run_as(scope, transform, function()
+                        push_dependency(node)
+                        return node.cached
+                    end, i)
+
+                    if not result.ok then
+                        error(result, 0)
+                    end
+                    
+                    input_nodes[i] = node
+                    output_cache[i] = result.value
+                else -- update source
+                    update_source_node(input_nodes[i], v)
+                end
+            end
+        end
+    end
 
     local function update_children(data)
         -- queue removed values
@@ -53,45 +85,7 @@ local function indexes<K, VI, VO>(input: () -> Map<K, VI>, transform: (() -> VI,
 
         table.clear(remove_queue)
 
-        push_scope(subowner)
-
-        -- process new or changed values
-        for i, v in data do
-            local cv = input_cache[i]
-
-            if cv ~= v then
-                input_cache[i] = v
-
-                if cv == nil then -- create new scope and run transform
-                    local scope = create_node(subowner :: Node<any>, false, false)
-                    scopes[i] = scope :: Node<any>
-
-                    local node = create_source_node(v)
-
-                    push_scope(scope)
-
-                    local ok, result = xpcall(transform, debug.traceback, function()
-                        push_child_to_scope(node)
-                        return node.cache
-                    end, i)
-                    
-                    pop_scope()
-
-                    if not ok then
-                        pop_scope() -- subowner scope
-                        error(result, 0)
-                    end
-                    
-                    input_nodes[i] = node
-                    output_cache[i] = result
-                else -- update source
-                    input_nodes[i].cache = v
-                    update_descendants(input_nodes[i])
-                end
-            end
-        end
-
-        pop_scope()
+        run_as_unsafe(subowner, update, data)
 
         local output_array = table.create(#scopes)
         for _, v in output_cache do
@@ -102,27 +96,64 @@ local function indexes<K, VI, VO>(input: () -> Map<K, VI>, transform: (() -> VI,
         return output_array
     end
 
-    local node = create_node(owner, function()
+    local node = create_reactive_node(owner, function()
         return update_children(input())
-    end, false :: any)
-
-    evaluate_node(node)
+    end, "lazy", false :: any)
 
     return function()
-        push_child_to_scope(node)
-        return node.cache
+        local result = evaluate_node(node)
+
+        if result.ok == false then
+            error(result)
+        else
+            return result.value
+        end
     end
 end
 
 local function values<K, VI, VO>(input: () -> Map<K, VI>, transform: (VI, () -> K) -> VO): () -> { VO }
-    local owner  = assert_stable_scope()
-    local subowner = create_node(owner, false, false)
+    local owner  = assert_stable_parent()
+    local subowner = create_stable_node(owner, false, false)
     
-    local cur_input_cache_up = {} :: Map<VI, K>
+    local cur_input_cache_up = {} :: Map<VI, K?>
     local new_input_cache_up = {} :: Map<VI, K>
     local output_cache = {} :: Map<VI, VO>
     local input_nodes = {} :: Map<VI, SourceNode<K>>
     local scopes = {} :: Map<VI, Node<unknown>>
+
+    local function update(data)
+        local cur_input_cache, new_input_cache = cur_input_cache_up, new_input_cache_up
+        for i, v in data do
+            new_input_cache[v] = i
+
+            local cv = cur_input_cache[v]
+            
+            if cv == nil then -- create new scope and run transform
+                local scope = create_stable_node(subowner :: Node<any>)
+                scopes[v] = scope :: Node<any>
+
+                local node = create_source_node(i)
+    
+                local result = run_as(scope, transform, v, function()
+                    push_dependency(node)
+                    return node.cached
+                end)
+
+                if not result.ok then
+                    error(result, 0)
+                end
+
+                input_nodes[v] = node
+                output_cache[v] = result.value
+            else -- update source
+                if cv ~= i then
+                    update_source_node(input_nodes[v], i)
+                end
+
+                cur_input_cache[v] = nil
+            end
+        end
+    end
 
     local function update_children(data: Map<K, VI>)
         local cur_input_cache, new_input_cache = cur_input_cache_up, new_input_cache_up
@@ -137,47 +168,7 @@ local function values<K, VI, VO>(input: () -> Map<K, VI>, transform: (VI, () -> 
             end
         end
 
-        push_scope(subowner)
-    
-        -- process data
-        for i, v in data do
-            new_input_cache[v] = i
-
-            local cv = cur_input_cache[v]
-            
-            if cv == nil then -- create new scope and run transform
-                local scope = create_node(subowner :: Node<any>, false, false)
-                scopes[v] = scope :: Node<any>
-
-                local node = create_source_node(i)
-    
-                push_scope(scope)
-                
-                local ok, result = xpcall(transform, debug.traceback, v, function()
-                    push_child_to_scope(node)
-                    return node.cache
-                end)
-                
-                pop_scope()
-
-                if not ok then
-                    pop_scope() -- subowner scope
-                    error(result, 0)
-                end
-
-                input_nodes[v] = node
-                output_cache[v] = result
-            else -- update source
-                if cv ~= i then
-                    input_nodes[v].cache = i
-                    update_descendants(input_nodes[v])
-                end
-
-                cur_input_cache[v] = nil
-            end
-        end
-
-        pop_scope()
+        run_as_unsafe(subowner, update, data)
 
         -- remove old values
         for v in cur_input_cache do
@@ -201,15 +192,18 @@ local function values<K, VI, VO>(input: () -> Map<K, VI>, transform: (VI, () -> 
         return output_array
     end
 
-    local node = create_node(owner, function()
+    local node = create_reactive_node(owner, function()
         return update_children(input())
     end, false :: any)
 
-    evaluate_node(node)
-
     return function()
-        push_child_to_scope(node)
-        return node.cache
+        local result = evaluate_node(node)
+
+        if result.ok == false then
+            error(result.err)
+        else
+            return result.value
+        end
     end
 end
 
