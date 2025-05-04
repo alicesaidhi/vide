@@ -379,7 +379,7 @@ type Instances = {
 	Wire: Wire,
 }
 
-type function getvideproperties(instancename, instances, instancetype)
+type function getvideproperties(instancename: type, instances: type, instancetype: type)
 	local instance
 	if instancename:is("string") or instancename:is("generic") then return types.never end
 
@@ -400,7 +400,7 @@ type function getvideproperties(instancename, instances, instancetype)
 		end
 
 		for key, value in value:properties() do
-			if key:value() == "Connect" and value.read.tag == "function" then
+			if key:value() == "Connect" and value.read and value.read.tag == "function" then
 				return value.read
 			end
 		end
@@ -408,7 +408,8 @@ type function getvideproperties(instancename, instances, instancetype)
 		return false
 	end
 
-	local function insert(object)
+	local function insert(object: type)
+		if object:readparent() == nil then return end
 		for key, value in object:properties() do
 			local is_a_signal = is_signal(value.read)
 			if is_a_signal and value.read:is("table") then -- luau-lsp
@@ -495,6 +496,6 @@ type function getvideinstance(instancename, instances, instancetype)
 end
 
 local c = (create :: any) ::
-	<T>(keyof<Instances> & T) -> (getvideproperties<T, Instances, Instance>) -> getvideinstance<T, Instances, Instance>
+	<T>(keyof<Instances> | T) -> (getvideproperties<T, Instances, Instance>) -> getvideinstance<T, Instances, Instance>
 
 return c
