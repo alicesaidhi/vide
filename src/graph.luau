@@ -7,8 +7,8 @@ export type SourceNode<T> = {
     --- The value that is currently cached
     cached: T,
 
-    --- Other nodes that depend on the result of this node
-    [number]: ReactiveNode<T>
+    --- Other nodes that depend on the result of this node.
+    read dependents: { ReactiveNode<T> }
 }
 
 export type StableNode<T> = {
@@ -49,7 +49,7 @@ export type ReactiveNode<T> = {
     read cleanups: { () -> () } | false,
 
     --- Other nodes that depend on the result of this node.
-    [number]: ReactiveNode<T>
+    read dependents: { ReactiveNode<T> }
 }
 
 export type Node<T> = ReactiveNode<T> | StableNode<T>
@@ -150,7 +150,7 @@ end
 local function push_dependency<T>(node: SourceNode<T> | ReactiveNode<T>)
     if processing_node and processing_node.effect then
         if processing_node == node then error(`cannot add itself as dependency {node.effect}, {processing_node.effect}`) end
-        table.insert(node, processing_node)
+        table.insert(node.dependents, processing_node)
         table.insert(processing_node.depending_on, node)
     end
 end
@@ -177,7 +177,7 @@ end
 local function remove_dependencies<T>(node: Node<T>)
     if node.effect then
         for idx, dependency in node.depending_on do
-            find_and_swap_pop(dependency, node)
+            find_and_swap_pop(dependency.dependents, node)
         end
         table.clear(node.depending_on)
     end
@@ -299,7 +299,7 @@ local _pending_eval: { ReactiveNode<unknown> } = {}
 local function invalidate_loop<T>(node: SourceNode<T> | ReactiveNode<T>)
     if node.state == "dirty" then return end
     
-    for _, value in ipairs(node) do
+    for _, value in node.dependents do
         if value.evaluation == "eager" then -- append it to a queue so it can be evaluated after all nodes are marked dirty.
             invalidate_loop(value)
             
@@ -349,6 +349,7 @@ local function create_reactive_node<T>(
         state = "dirty",
         cached = cached,
         depending_on = {},
+        dependents = {},
 
         children = {} :: { Node<T> },
         cleanups = {}
@@ -389,7 +390,8 @@ local function create_source_node<T>(value: T): SourceNode<T>
         last_evaluation = bump_version(),
         effect = false,
         cached = value,
-        state = "clean"
+        state = "clean",
+        dependents = {}
     }
 
     return node
