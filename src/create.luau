@@ -56,7 +56,6 @@ local function create(class_or_instance: string | Instance, props: Props?): ((Pr
 end
 
 type Props = { [any]: any }
-
 type Instances = {
 	AccessoryDescription: AccessoryDescription,
 	Accoutrement: Accoutrement,
@@ -379,7 +378,7 @@ type Instances = {
 	Wire: Wire,
 }
 
-type function getvideproperties(instance, instancetype)
+type function getvideproperties(instance: type, instancetype: type)
 	local properties = {}
 	local nil_type = types.singleton(nil)
 
@@ -439,7 +438,7 @@ type function getvideproperties(instance, instancetype)
 			end
 		end
 
-		insert(object:parent())
+		insert(object:readparent())
 	end
 	insert(instance)
 
@@ -470,7 +469,7 @@ type function getvideproperties(instance, instancetype)
 	return vide_props
 end
 
-type function getvideinstance(instancename, instances, instancetype)
+type function getvideinstance(instancename: type, instances: type, instancetype: type)
 	-- assert(instancename:is("generic") == false, "received generic")
 	if instancename:is("string") or instancename:is("generic") then return instancetype end
 

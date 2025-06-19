@@ -78,7 +78,7 @@ local vide = {
 
     -- temporary
     apply = function<T>(instance: T & Instance)
-        return function(props: getvideproperties<T, Instance>)
+        return function(props: { [any]: any })
             apply(instance, props)
             return instance
         end

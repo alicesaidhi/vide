@@ -23,16 +23,16 @@ local function context<T>(...: T): Context<T>
         if select("#", ...) == 0 then -- get
             while scope do
                 assert(scope)
-                local actal_scope: Node<unknown> = scope
-                local value = context[actal_scope]
+                local actual_scope: Node<unknown> = scope
+                local value = context[actual_scope]
     
                 if not value then
-                    scope = actal_scope.parent
+                    scope = actual_scope.parent
                     continue
                 end
 
                 if value == nil then
-                    scope = actal_scope.parent
+                    scope = actual_scope.parent
                     continue
                 end
                 
@@ -59,7 +59,6 @@ local function context<T>(...: T): Context<T>
                 error(`error while running context:\n\n{result}`, 0)
             end
 
-            print(result.value)
             return result.value
         end
 

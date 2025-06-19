@@ -1,5 +1,8 @@
+local flags = require "./flags"
+
 export type SourceNode<T> = {
     last_evaluation: number,
+    read state: "clean",
     read effect: false,
     --- The value that is currently cached
     cached: T,
@@ -13,6 +16,7 @@ export type StableNode<T> = {
     read parent: Node<T> | false,
     --- Describes the effect to run to compute the result of this node.
     read effect: false,
+    read state: "clean",
     read last_evaluation: number,
     --- The value of this node
     read cached: T,
@@ -24,7 +28,7 @@ export type StableNode<T> = {
 
 export type ReactiveNode<T> = {
     --- The parent of this node.
-    read parent: Node<T>,
+    read parent: Node<T> | false,
     --- Describes the effect to run to compute the result of this node.
     read effect: (T) -> T,
     read evaluation: "eager" | "deferred" | "lazy" | "dead",
@@ -94,7 +98,7 @@ local function fail_result<ERR>(value: ERR, trace: string): { ok: false, err: ER
     return _result :: any
 end
 
-local function get_result<OK, T...>(fn: (T...) -> OK, ...: T...): Result<OK>
+local function get_result<OK, T...>(fn: (T...) -> OK, ...: T...): Result<OK, unknown>
     local ok, value: any = xpcall(fn, function(err: string)
         local message = string.gsub(tostring(err), "^.+:%d+:%s*", "")
         local trace = debug.traceback(nil, 2)
@@ -111,7 +115,7 @@ local function get_result<OK, T...>(fn: (T...) -> OK, ...: T...): Result<OK>
 end
 -- *
 
-local function run_as<T, U...>(owner: Node<any> | false, fn: (U...) -> T, ...: U...): Result<T>
+local function run_as<T, U...>(owner: Node<any> | false, fn: (U...) -> T, ...: U...): Result<T, unknown>
     local previous_processing = processing_node
     processing_node = owner
     local result = get_result(fn, ...)
@@ -119,7 +123,7 @@ local function run_as<T, U...>(owner: Node<any> | false, fn: (U...) -> T, ...: U
     return result
 end
 
-local function run_as_unsafe<T, U...>(owner: Node<any> | false, fn: (U...) -> T, ...: U...): Result<T>
+local function run_as_unsafe<T, U...>(owner: Node<any> | false, fn: (U...) -> T, ...: U...): Result<T, unknown>
     local previous_processing = processing_node
     processing_node = owner
     local result = fn(...)
@@ -159,8 +163,9 @@ local function find_and_swap_pop<T>(t: { T }, v: T)
 end
 
 local function flush_cleanups<T>(node: Node<T>)
+    -- if node.effect and flags.strict then print(debug.traceback()) end
     if node.cleanups then
-        for _, fn in next, node.cleanups do
+        for _, fn in node.cleanups do
             local result = get_result(fn)
             if not result.ok then error(`cleanup error: {result.err}`, 0) end
         end
@@ -171,7 +176,7 @@ end
 
 local function remove_dependencies<T>(node: Node<T>)
     if node.effect then
-        for _, dependency in node.depending_on do
+        for idx, dependency in node.depending_on do
             find_and_swap_pop(dependency, node)
         end
         table.clear(node.depending_on)
@@ -179,15 +184,18 @@ local function remove_dependencies<T>(node: Node<T>)
 end
 
 local function destroy<T>(node: Node<T>)
-    -- print("destroyed", node, debug.traceback())
     -- node.cached = nil
     flush_cleanups(node)
     remove_dependencies(node)
-    
-    for _, node: Node<T> in node.children do
-        destroy(node)
+
+    if node.parent then
+        find_and_swap_pop(node.parent.children, node)
+        node.parent = false
     end
-    table.clear(node.children)
+
+    while node.children[1] do
+        destroy(node.children[1])
+    end
 end
 
 local function destroy_owned<T>(node: Node<T>)
@@ -249,7 +257,7 @@ local function is_dirty<T>(node: ReactiveNode<T>)
         -- if a dependent was evaluated after this node was evaluated, it's dirty
         if dependency.effect and dependency.state == "dirty" then
             -- make sure the dependency isn't dirty
-            update_node(dependency)
+            update_node(dependency :: ReactiveNode<T>)
         end
 
         if dependency.last_evaluation > last_evaluation then
@@ -270,8 +278,8 @@ local function evaluate_node<T>(node: SourceNode<T> | ReactiveNode<T>): Result<T
         return fail_result(`this creates a recursive dependency, which can result in creating a infinite loop.`, debug.traceback(nil, 2))
     elseif node.state == "dead" then
         return ok_result(node.cached)
-    elseif is_dirty(node) then
-        return update_node(node)
+    elseif is_dirty(node :: ReactiveNode<T>) then
+        return update_node(node :: ReactiveNode<T>)
     else
         node.state = "clean" :: any
         return ok_result(node.cached)
@@ -290,16 +298,20 @@ end
 local _pending_eval: { ReactiveNode<unknown> } = {}
 local function invalidate_loop<T>(node: SourceNode<T> | ReactiveNode<T>)
     if node.state == "dirty" then return end
+    
     for _, value in ipairs(node) do
         if value.evaluation == "eager" then -- append it to a queue so it can be evaluated after all nodes are marked dirty.
             invalidate_loop(value)
+            
             value.state = "dirty"
             table.insert(_pending_eval, value)
         elseif value.evaluation == "deferred" then
             invalidate_loop(value)
+
             defer_node(value)
         else
             invalidate_loop(value)
+
             value.state = "dirty"
         end
     end
@@ -322,8 +334,13 @@ local function invalidate<T>(node: SourceNode<T>)
     table.clear(_pending_eval)
 end
 
-local function create_reactive_node<T>(parent: StableNode<T> | false, effect: (T) -> T, evaluation: "eager" | "deferred" | "lazy", cached: T?)
-    local node = {
+local function create_reactive_node<T>(
+    parent: StableNode<T> | false,
+    effect: (T) -> T,
+    evaluation: "eager" | "deferred" | "lazy",
+    cached: T?
+)
+    local node: ReactiveNode<T> = {
         parent = parent,
         last_evaluation = bump_version(),
         
@@ -335,7 +352,7 @@ local function create_reactive_node<T>(parent: StableNode<T> | false, effect: (T
 
         children = {} :: { Node<T> },
         cleanups = {}
-    } :: ReactiveNode<T>
+    }
 
     if parent then table.insert(parent.children, node) end
 
@@ -347,15 +364,18 @@ local function create_reactive_node<T>(parent: StableNode<T> | false, effect: (T
 end
 
 local function create_stable_node<T>(parent: Node<T> | false)
-    local node = {
+    local node: StableNode<T> = {
         parent = parent,
+        
+        effect = false,
+        state = "clean",
         last_evaluation = bump_version(),
 
-        effect = false,
+        cached = nil,
 
-        children = table.create(1),
-        cleanups = table.create(1)
-    } :: StableNode<T>
+        children = {},
+        cleanups = {}
+    }
     
     if parent then
         table.insert(parent.children, node)
@@ -365,11 +385,12 @@ local function create_stable_node<T>(parent: Node<T> | false)
 end
 
 local function create_source_node<T>(value: T): SourceNode<T>
-    local node = {
+    local node: SourceNode<T> = {
         last_evaluation = bump_version(),
         effect = false,
-        cached = value
-    } :: SourceNode<T>
+        cached = value,
+        state = "clean"
+    }
 
     return node
 end

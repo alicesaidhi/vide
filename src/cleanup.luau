@@ -4,7 +4,16 @@ local graph = require "./graph"
 local get_scope = graph.get_scope
 local push_cleanup = graph.push_cleanup
 
-local function helper(obj: any)
+local function helper(
+    obj:
+        | RBXScriptConnection
+        | thread
+        | Instance
+        | { destroy: (any) -> () }
+        | { Destroy: (any) -> () }
+        | { disconnect: (any) -> () }
+        | { Disconnect: (any) -> () }
+)
     return
         if typeof(obj) == "RBXScriptConnection" then function() obj:Disconnect() end
         elseif type(obj) == "thread" then function() task.cancel(obj) end

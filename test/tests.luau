@@ -556,6 +556,7 @@ TEST("derive()", wrap_root(function()
             CHECK(cleaned[1] == 1)
             local child2 = owner()
 
+            print("child1", child1())
             CHECK(child1() == 1)
             CHECK(child2() == 2)
         end)

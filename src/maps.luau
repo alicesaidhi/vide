@@ -65,11 +65,11 @@ local function indexes<K, VI, VO>(input: () -> Map<K, VI>, transform: (() -> VI,
         end
     end
 
-    local function update_children(data)
+    local function update_children(data: Map<K, VI>)
         -- queue removed values
-        for i in input_cache do
-            if data[i] == nil then
-                table.insert(remove_queue, i)
+        for k in input_cache do
+            if data[k] == nil then
+                table.insert(remove_queue, k)
             end
         end
 
@@ -121,7 +121,7 @@ local function values<K, VI, VO>(input: () -> Map<K, VI>, transform: (VI, () -> 
     local input_nodes = {} :: Map<VI, SourceNode<K>>
     local scopes = {} :: Map<VI, Node<unknown>>
 
-    local function update(data)
+    local function update(data: Map<K, VI>)
         local cur_input_cache, new_input_cache = cur_input_cache_up, new_input_cache_up
         for i, v in data do
             new_input_cache[v] = i
