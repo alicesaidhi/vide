@@ -1,4 +1,4 @@
-type Action = {
+export type Action = {
     read priority: number,
     read callback: (Instance) -> ()
 }

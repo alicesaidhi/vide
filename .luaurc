@@ -1,6 +1,13 @@
 {
-    "languageMode": "strict",
-    "lint": { "BuiltinGlobalWrite": false, "UnknownGlobal": false },
-    "globals": [ "Instance" ]
+  "languageMode": "strict",
+  "lint": {
+    "BuiltinGlobalWrite": false,
+    "UnknownGlobal": false
+  },
+  "globals": [
+    "Instance"
+  ],
+  "aliases": {
+    "lune": "~/.lune/.typedefs/0.10.4/"
+  }
 }
-

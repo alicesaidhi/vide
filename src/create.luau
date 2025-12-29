@@ -3,6 +3,7 @@ local Instance = game and Instance or require "../test/mock".Instance :: never
 
 local defaults = require "./defaults"
 local apply = require "./apply"
+local action = require "./action"
 local flags = require "./flags"
 
 local ctor_cache = {} :: { [string]: (Props) -> Instance }
@@ -59,7 +60,6 @@ local function create(class_or_instance: string | Instance, props: Props?): ((Pr
 end
 
 type Props = { [any]: any }
-
 type Instances = {
 	AccessoryDescription: AccessoryDescription,
 	Accoutrement: Accoutrement,
@@ -68,9 +68,11 @@ type Instances = {
 	AdPortal: AdPortal,
 	AdvancedDragger: AdvancedDragger,
 	Animation: Animation,
+	AnimationGraphDefinition: AnimationGraphDefinition,
 	CurveAnimation: CurveAnimation,
 	KeyframeSequence: KeyframeSequence,
 	AnimationController: AnimationController,
+	AnimationNodeDefinition: AnimationNodeDefinition,
 	AnimationRigData: AnimationRigData,
 	Animator: Animator,
 	Annotation: Annotation,
@@ -92,12 +94,23 @@ type Instances = {
 	AudioFader: AudioFader,
 	AudioFilter: AudioFilter,
 	AudioFlanger: AudioFlanger,
+	AudioGate: AudioGate,
 	AudioLimiter: AudioLimiter,
 	AudioListener: AudioListener,
 	AudioPitchShifter: AudioPitchShifter,
 	AudioPlayer: AudioPlayer,
+	AudioRecorder: AudioRecorder,
 	AudioReverb: AudioReverb,
 	AudioSearchParams: AudioSearchParams,
+	AudioSpeechToText: AudioSpeechToText,
+	AudioTextToSpeech: AudioTextToSpeech,
+	AudioTremolo: AudioTremolo,
+	AvatarAccessoryRules: AvatarAccessoryRules,
+	AvatarAnimationRules: AvatarAnimationRules,
+	AvatarBodyRules: AvatarBodyRules,
+	AvatarClothingRules: AvatarClothingRules,
+	AvatarCollisionRules: AvatarCollisionRules,
+	AvatarRules: AvatarRules,
 	Backpack: Backpack,
 	RemoteEvent: RemoteEvent,
 	UnreliableRemoteEvent: UnreliableRemoteEvent,
@@ -116,7 +129,6 @@ type Instances = {
 	RocketPropulsion: RocketPropulsion,
 	BodyPartDescription: BodyPartDescription,
 	Breakpoint: Breakpoint,
-	Camera: Camera,
 	BodyColors: BodyColors,
 	CharacterMesh: CharacterMesh,
 	Pants: Pants,
@@ -126,6 +138,7 @@ type Instances = {
 	ClickDetector: ClickDetector,
 	DragDetector: DragDetector,
 	Clouds: Clouds,
+	CompositeValueCurve: CompositeValueCurve,
 	Configuration: Configuration,
 	AlignOrientation: AlignOrientation,
 	AlignPosition: AlignPosition,
@@ -155,7 +168,10 @@ type Instances = {
 	GroundController: GroundController,
 	SwimController: SwimController,
 	ControllerManager: ControllerManager,
-	-- BlockMesh: BlockMesh,
+	CustomEvent: CustomEvent,
+	CustomEventReceiver: CustomEventReceiver,
+	CustomLog: CustomLog,
+	BlockMesh: BlockMesh,
 	CylinderMesh: CylinderMesh,
 	FileMesh: FileMesh,
 	SpecialMesh: SpecialMesh,
@@ -194,6 +210,7 @@ type Instances = {
 	RelativeGui: RelativeGui,
 	ScrollingFrame: ScrollingFrame,
 	TextBox: TextBox,
+	VideoDisplay: VideoDisplay,
 	VideoFrame: VideoFrame,
 	ViewportFrame: ViewportFrame,
 	BillboardGui: BillboardGui,
@@ -208,6 +225,7 @@ type Instances = {
 	CylinderHandleAdornment: CylinderHandleAdornment,
 	ImageHandleAdornment: ImageHandleAdornment,
 	LineHandleAdornment: LineHandleAdornment,
+	PyramidHandleAdornment: PyramidHandleAdornment,
 	SphereHandleAdornment: SphereHandleAdornment,
 	WireframeHandleAdornment: WireframeHandleAdornment,
 	ParabolaAdornment: ParabolaAdornment,
@@ -218,13 +236,18 @@ type Instances = {
 	SelectionPartLasso: SelectionPartLasso,
 	SelectionPointLasso: SelectionPointLasso,
 	Path2D: Path2D,
+	HandRigDescription: HandRigDescription,
 	HapticEffect: HapticEffect,
 	HeightmapImporterService: HeightmapImporterService,
 	HiddenSurfaceRemovalAsset: HiddenSurfaceRemovalAsset,
 	Highlight: Highlight,
 	Humanoid: Humanoid,
 	HumanoidDescription: HumanoidDescription,
+	HumanoidRigDescription: HumanoidRigDescription,
 	IKControl: IKControl,
+	InputAction: InputAction,
+	InputBinding: InputBinding,
+	InputContext: InputContext,
 	RotateP: RotateP,
 	RotateV: RotateV,
 	Glue: Glue,
@@ -245,6 +268,7 @@ type Instances = {
 	Script: Script,
 	LocalScript: LocalScript,
 	ModuleScript: ModuleScript,
+	MakeupDescription: MakeupDescription,
 	MarkerCurve: MarkerCurve,
 	MaterialVariant: MaterialVariant,
 	MemoryStoreService: MemoryStoreService,
@@ -267,6 +291,7 @@ type Instances = {
 	UnionOperation: UnionOperation,
 	TrussPart: TrussPart,
 	VehicleSeat: VehicleSeat,
+	Camera: Camera,
 	Model: Model,
 	Actor: Actor,
 	HopperBin: HopperBin,
@@ -332,6 +357,7 @@ type Instances = {
 	StyleSheet: StyleSheet,
 	StyleDerive: StyleDerive,
 	StyleLink: StyleLink,
+	StyleQuery: StyleQuery,
 	SurfaceAppearance: SurfaceAppearance,
 	Team: Team,
 	TeleportOptions: TeleportOptions,
@@ -342,6 +368,7 @@ type Instances = {
 	TextChatCommand: TextChatCommand,
 	TextChatMessageProperties: TextChatMessageProperties,
 	BubbleChatMessageProperties: BubbleChatMessageProperties,
+	TextGenerator: TextGenerator,
 	TrackerStreamAnimation: TrackerStreamAnimation,
 	Trail: Trail,
 	Tween: Tween,
@@ -372,6 +399,7 @@ type Instances = {
 	RayValue: RayValue,
 	StringValue: StringValue,
 	Vector3Value: Vector3Value,
+	ValueCurve: ValueCurve,
 	Vector3Curve: Vector3Curve,
 	VideoDeviceInput: VideoDeviceInput,
 	VideoPlayer: VideoPlayer,
@@ -380,125 +408,81 @@ type Instances = {
 	VisualizationModeCategory: VisualizationModeCategory,
 	WeldConstraint: WeldConstraint,
 	Wire: Wire,
+	WrapTextureTransfer: WrapTextureTransfer,
 }
 
-type function getvideproperties(instancename: type, instances: type, instancetype: type)
-	local instance
-	if instancename:is("string") or instancename:is("generic") then return types.never end
+type instance = Instance
 
-	for key, value in instances:properties() do
-		if key:value() == instancename:value() then
-			instance = value.read
-		end
+type Action = action.Action
+
+type function GetInstance(class_name: type, instances: type): type
+	if not class_name:is("singleton") then
+		return instance
 	end
 
+	return instances:readproperty(class_name) or instance
+end
 
-	if instance == types.never then return types.never end
-	local properties = {}
-	local nil_type = types.singleton(nil)
+-- temp arg for action, because for some reason its not added as a global automatically
+export type function PropertiesFor(class_name: type): type
+	local object = GetInstance(class_name, Instances)
+	local head_table = {}
+	local args_table = { head = head_table }
+	local properties = types.newtable()
+	local current = object
+	local empty_table = {}
 
-	local function is_signal(value: type)
-		if not (value:is("class") or value:is("table")) then
-			return false
-		end
-
-		for key, value in value:properties() do
-			if key:value() == "Connect" and value.read and value.read.tag == "function" then
-				return value.read
-			end
-		end
-
-		return false
-	end
-
-	local function insert(object: type)
-		if object:readparent() == nil then return end
-		for key, value in object:properties() do
-			local is_a_signal = is_signal(value.read)
-			if is_a_signal and value.read:is("table") then -- luau-lsp
-				local connect_fn = is_a_signal
-				local params = connect_fn:parameters()
-				table.remove(params.head, 1)
-	
-				local type = types.unionof(
-					nil_type,
-					types.newfunction(params)
-				)
-	
-				properties[key] = { read = type }
-			elseif is_a_signal and value.read:is("class") then -- roblox-studio
-				local connect_fn = is_a_signal
-				local params = connect_fn:parameters()
-				table.remove(params.head, 1)
-
-				local type = types.unionof(
-					nil_type,
-					types.newfunction(params)
-				)
-
-				properties[key] = { read = type }
-			elseif value.read:is("function") or value.read:is("intersection") then
-				continue
-			elseif value.write then
-
-				local value = value.write
-	
-				local type = types.unionof(
-					types.newfunction({}, { head = { value } }),
-					value,
-					nil_type
-				)
-	
-				properties[key] = { read = type }
-			end
-		end
-
-		if object:readparent() == nil then return end
-		insert(object:readparent())
-	end
-	insert(instance)
-
-	local vide_props = types.newtable(properties)
-	local vide_action = types.newtable({
-		[types.singleton "priority"] = { read = types.number },
-		[types.singleton "callback"] = { read = types.newfunction({ head = { instancetype } }) }
+	local read_only_properties = table.freeze({
+		types.singleton("RobloxLocked"),
+		types.singleton("ClassName"),
+		types.singleton("UniqueId"),
 	})
 
-	local function_returns_child = types.newfunction()
+	while current do
+		for property, value in current:properties() do
+			if table.find(read_only_properties, property) then
+				continue
+			end
+
+			local value_read = value.read :: type
+			local callback = is_signal(value_read)
+
+			if callback then
+				properties:setproperty(property :: any, types.optional(callback))
+			elseif value_read.tag == "function" or value_read.tag == "intersection" then
+				continue
+			elseif value.write then
+				head_table[1] = value_read
+
+				properties:setproperty(
+					property :: any,
+					types.optional(
+						types.unionof(
+							types.newfunction(empty_table :: any, args_table :: any),
+							value.write :: any
+						)
+					)
+				)
+			end
+		end
+
+		current = current:readparent()
+	end
+
 	local nested_table_or_function_or_child = types.newtable()
-	local union = types.unionof( instancetype, function_returns_child, nested_table_or_function_or_child )
+	local function_returns_child = types.newfunction()
+	local union =
+		types.unionof(nested_table_or_function_or_child, function_returns_child, instance, Action)
 
 	nested_table_or_function_or_child:setindexer(types.number, union)
 	function_returns_child:setreturns({ union })
 
-	vide_props:setindexer(
-		types.number,
-		types.unionof(
-			vide_action,
-			instancetype,
-			function_returns_child,
-			vide_props,
-			nil_type
-		)
-	)
+	properties:setindexer(types.number, types.optional(union))
 
-	return vide_props
-end
-
-type function getvideinstance(instancename, instances, instancetype)
-	-- assert(instancename:is("generic") == false, "received generic")
-	if instancename:is("string") or instancename:is("generic") then return types.never end
-
-	for key, value in instances:properties() do
-		if key:value() == instancename:value() then
-			return value.read
-		end
-	end
-
-	return types.never
+	return properties
 end
 
 local c = (create :: any) ::
-	<T>(keyof<Instances> | T) -> (getvideproperties<T, Instances, Instance>) -> getvideinstance<T, Instances, Instance>
+	<ClassName>(keyof<Instances> | ClassName) -> ( props: PropertiesFor<ClassName> ) -> GetInstance<ClassName, Instances>
 
 return c
