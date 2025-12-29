@@ -6,11 +6,9 @@ local create_source_node = graph.create_source_node
 local assert_stable_scope = graph.assert_stable_scope
 local evaluate_node = graph.evaluate_node
 local update_descendants = graph.update_descendants
-local push_child_to_scope = graph.push_child_to_scope
+local push_scope_as_child_of = graph.push_scope_as_child_of
 
 local UPDATE_RATE = 120
-local TOLERANCE = 0.001
-local TOLERANCE_VECTOR = vector.create(TOLERANCE, TOLERANCE, TOLERANCE)
 
 type Animatable = number | CFrame | Color3 | UDim | UDim2 | Vector2 | Vector3
 
@@ -74,7 +72,11 @@ local type_to_vec6 = {
 
     Rect = function(v)
         return vector.create(v.Min.X, v.Min.Y, v.Max.X), vector.create(v.Max.Y, 0, 0)
-    end :: TypeToVec6<Rect>
+    end :: TypeToVec6<Rect>,
+
+    table = function(v)
+        return vector.create(v[1] or 0, v[2] or 0, v[3] or 0), vector.create(v[4] or 0, 0, 0)
+    end :: TypeToVec6<{ number }>
 }
 
 local vec6_to_type = {
@@ -108,7 +110,11 @@ local vec6_to_type = {
 
     Rect = function(a, b)
         return Rect.new(a.X, a.Y, a.Z, b.X)
-    end :: Vec6ToType<Rect>
+    end :: Vec6ToType<Rect>,
+
+    table = function(a, b)
+        return { a.X, a.Y, a.Z, b.X }
+    end :: Vec6ToType<{ number }>
 }
 
 local invalid_type = {
@@ -178,7 +184,7 @@ local function spring<T>(source: () -> T, period: number?, damping_ratio: number
     -- set output to goal
     output.cache = data.source_value
 
-    local setter = function(p)
+    local config = function(p)
         local x = p.position
         local v = p.velocity
         local dv = p.impulse
@@ -202,7 +208,7 @@ local function spring<T>(source: () -> T, period: number?, damping_ratio: number
 
     return function(...)
         if select("#", ...) == 0 then -- no args were given
-            push_child_to_scope(output)
+            push_scope_as_child_of(output)
             return output.cache
         end
 
@@ -221,7 +227,25 @@ local function spring<T>(source: () -> T, period: number?, damping_ratio: number
         output.cache = v
 
         return v
-    end, setter
+    end, config
+end
+
+-- luau vectors have f32 for each component, unlike luau number which is f64 
+local FLOAT32_MANTISSA_BITS = 23
+type float32 = number
+
+local function get_min_step(x: float32)
+    local _,exponent = math.frexp(x)
+
+    local lower_mantissa = math.ldexp(1, -FLOAT32_MANTISSA_BITS - 1)
+    return math.ldexp(lower_mantissa, exponent)
+end
+local function get_min_vector_step(goal: vector): vector
+    return vector.create(
+        get_min_step(goal.x),
+        get_min_step(goal.y),
+        get_min_step(goal.z)
+    )
 end
 
 local function step_springs(dt: number)
@@ -232,6 +256,8 @@ local function step_springs(dt: number)
             data.k, data.c,
             data.x0_123, data.x1_123, data.v_123,
             data.x0_456, data.x1_456, data.v_456
+
+        if x0_123 == x1_123 and x0_456 == x1_456 then continue end
 
         -- calculate displacement from target
         local dx_123 = x0_123 - x1_123
@@ -253,9 +279,13 @@ local function step_springs(dt: number)
         local v_123 = u_123 + dv_123
         local v_456 = u_456 + dv_456
 
+        -- guarantee pos < pos + velocity <= goal
+        local a_123 = vector.max(get_min_vector_step(x0_123), vector.abs(v_123) * dt) * vector.sign(v_123)
+        local a_456 = vector.max(get_min_vector_step(x0_456), vector.abs(v_456) * dt) * vector.sign(v_456)
+
         -- calculate new position
-        local x_123 = x0_123 + v_123*dt
-        local x_456 = x0_456 + v_456*dt
+        local x_123 = x0_123 + a_123
+        local x_456 = x0_456 + a_456
 
         data.x0_123, data.x0_456 = x_123, x_456
         data.v_123, data.v_456 = v_123, v_456
@@ -264,21 +294,8 @@ end
 
 local function update_spring_sources()
     for data, output in springs do
-        local x0_123, x1_123, v_123,
-        x0_456, x1_456, v_456 =
-            data.x0_123, data.x1_123, data.v_123,
-            data.x0_456, data.x1_456, data.v_456
-
-        local max_difference = vector.max(
-            vector.abs(x0_123 - x1_123 :: any),
-            vector.abs(x0_456 - x1_456 :: any),
-            vector.abs(v_123 :: any),
-            vector.abs(v_456 :: any),
-            TOLERANCE_VECTOR
-        )
-
-        if max_difference == TOLERANCE_VECTOR then
-            -- close enough to target, unshedule spring and set value to target
+        local x0_123, x0_456 = data.x0_123, data.x0_456
+        if x0_123 == data.x1_123 and x0_456 == data.x1_456 then
             springs[data] = nil
             output.cache = data.source_value
         else

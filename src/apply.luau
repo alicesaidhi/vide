@@ -23,6 +23,9 @@ type Cache = {
         Array<(Instance) -> ()> -- action callbacks
     >,
 
+    -- what to parent the instance to after running actions
+    parent: unknown,
+
     -- cache to detect duplicate property setting at same nesting depth
     read nested_debug: Map<
         number, -- depth
@@ -46,10 +49,11 @@ local function borrow_cache(): Cache
             events = {},
             actions = setmetatable({}, { -- lazy init
                 __index = function(self, i) self[i] = {}; return self[i] end
-            }) :: any,
-            nested_debug = setmetatable({}, {
-                __index = function(self, i) self[i] = {}; return self[i] end
-            }) :: any,
+            }),
+            parent = nil,
+            nested_debug = setmetatable({} :: any, {
+                __index = function(self, i: number) self[i] = {}; return self[i] end
+            }),
             nested_stack = {}
         }
     end
@@ -61,14 +65,17 @@ end
 
 local function process_properties(properties: Map<unknown, unknown>, instance: Instance, cache: Cache, depth: number)
     for property, value in properties do
-        if property == "Parent" then continue end
-
         if type(property) == "string" then
             if flags.strict then -- check for duplicate property assignment at nesting depth
                 if cache.nested_debug[depth][property] then
                     error(`duplicate property {property} at depth {depth}`, 0)
                 end
                 cache.nested_debug[depth][property] = true
+            end
+
+            if property == "Parent" then
+                cache.parent = value
+                continue
             end
 
             if type(value) == "function" then 
@@ -106,9 +113,6 @@ local function apply<T>(instance: T & Instance, properties: { [unknown]: unknown
         error "attempt to call a constructor returned by create() with no properties"
     end
 
-    -- queue parent assignment if any for last
-    local parent: unknown = properties.Parent 
-
     local caches = borrow_cache()
     local events = caches.events
     local actions = caches.actions
@@ -135,6 +139,7 @@ local function apply<T>(instance: T & Instance, properties: { [unknown]: unknown
         end
     end
 
+    local parent = caches.parent
     if parent then
         if type(parent) == "function" then
             implicit_effect.parent(instance, parent :: () -> Instance)
@@ -145,6 +150,7 @@ local function apply<T>(instance: T & Instance, properties: { [unknown]: unknown
 
     table.clear(events)
     for _, queued in actions do table.clear(queued) end
+    caches.parent = nil
     if flags.strict then table.clear(nested_debug) end
     table.clear(nested_stack)
 

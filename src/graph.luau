@@ -148,6 +148,10 @@ local update_queue = { n = 0 } :: { n: number, [number]: Node<any> }
 
 local function evaluate_node<T>(node: Node<T>)
     if flags.strict then
+        if table.find(scopes, node) then
+            error("a scope, that should rerun due to the update of a source, is already active", 0)
+        end
+
         local initial_value = node.cache
 
         for i = 1, 2 do
@@ -245,7 +249,7 @@ local function update_descendants<T>(root: SourceNode<T>)
     update_queue.n = n0
 end
 
-local function push_child_to_scope<T>(node: SourceNode<T>)
+local function push_scope_as_child_of<T>(node: SourceNode<T>)
     local scope = get_scope()
     if scope and scope.effect then -- do not track nodes with no effect
         push_child(node, scope)
@@ -302,7 +306,7 @@ return table.freeze {
     push_cleanup = push_cleanup,
     destroy = destroy,
     flush_cleanups = flush_cleanups,
-    push_child_to_scope = push_child_to_scope,
+    push_scope_as_child_of = push_scope_as_child_of,
     update_descendants = update_descendants,
     push_child = push_child,
     create_node = create_node,

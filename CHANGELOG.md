@@ -19,6 +19,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `show()` now receives a source to its callback returning the current value
   of the condition.
 - Ignore `false` passed as a child.
+- Flag `vide.defaults` to disable the setting of default properties.
+- Delayed scope destruction for control flow functions: `show()` `switch()` `indexes()` `values()`.
 
 ### Changed
 
@@ -28,6 +30,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   destroyed.
 - Error reporting should be improved with better formatting when effects invoke
   other effects and no more loss of stack traces.
+- Nesting parent properties now work, and they are now also checked for
+  duplicates like other properties.
 
 ### Removed
 

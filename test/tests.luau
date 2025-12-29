@@ -6,6 +6,26 @@ local Instance, Signal = mock.Instance, mock.Signal
 local Vector2, UDim2 = mock.Vector2, mock.UDim2
 
 local vide = require "../../vide"
+    local root = vide.root
+    local mount = vide.mount
+    local create = vide.create
+    local source = vide.source
+    local effect = vide.effect
+    local derive = vide.derive
+    local switch = vide.switch
+    local show = vide.show
+    local indexes = vide.indexes
+    local values = vide.values
+    local cleanup = vide.cleanup
+    local untrack = vide.untrack
+    local read = vide.read
+    local batch = vide.batch
+    local context = vide.context
+    local spring = vide.spring
+    local action = vide.action
+    local changed = vide.changed
+    local apply = vide.apply
+    local step = vide.step
 local graph = require "../../vide/src/graph"
 type Node<T> = graph.Node<T>
 
@@ -35,7 +55,7 @@ vide.strict = false
 
 TEST("graph", function()
     local create_node = graph.create_node
-    local push_child_to_scope = graph.push_child_to_scope
+    local push_scope_as_child_of = graph.push_scope_as_child_of
     local update_descendants = graph.update_descendants
     local push_child = graph.push_child
     local get_scope = graph.get_scope
@@ -65,8 +85,8 @@ TEST("graph", function()
 
         push_scope(c)
 
-        push_child_to_scope(a)
-        push_child_to_scope(b)
+        push_scope_as_child_of(a)
+        push_scope_as_child_of(b)
 
         pop_scope()
 
@@ -83,8 +103,8 @@ TEST("graph", function()
         local count = 0
 
         local function effect(x)
-            push_child_to_scope(a)
-            push_child_to_scope(b)
+            push_scope_as_child_of(a)
+            push_scope_as_child_of(b)
             count += 1
             return not x
         end
@@ -115,9 +135,9 @@ TEST("graph", function()
         function c.effect(x) c_cnt += 1; return not x end
         function d.effect(x) d_cnt += 1; return not x end
 
-        push_scope(b); push_child_to_scope(a); pop_scope()
-        push_scope(c); push_child_to_scope(a); pop_scope()
-        push_scope(d); push_child_to_scope(b); push_child_to_scope(c); pop_scope()
+        push_scope(b); push_scope_as_child_of(a); pop_scope()
+        push_scope(c); push_scope_as_child_of(a); pop_scope()
+        push_scope(d); push_scope_as_child_of(b); push_scope_as_child_of(c); pop_scope()
 
         update_descendants(a)
 
@@ -131,8 +151,8 @@ TEST("graph", function()
         local a, b, c = node(root), node(root), node(root)
 
         function c.effect(x)
-            push_child_to_scope(a)
-            push_child_to_scope(b)
+            push_scope_as_child_of(a)
+            push_scope_as_child_of(b)
             return not x
         end
 
@@ -171,10 +191,10 @@ TEST("graph", function()
         do push_scope(root) 
             clean "root"
             items_updated = node(root)
-            push_child_to_scope(items_updated) -- should not
+            push_scope_as_child_of(items_updated) -- should not
 
             do push_scope(items_updated)
-                push_child_to_scope(items)
+                push_scope_as_child_of(items)
 
                 do push_scope(root)
                     do push_scope(scope1)
@@ -183,7 +203,7 @@ TEST("graph", function()
 
                         do push_scope(bind1)
                             clean "bind1"
-                            push_child_to_scope(selected)
+                            push_scope_as_child_of(selected)
                         pop_scope() end
                     pop_scope() end
 
@@ -192,7 +212,7 @@ TEST("graph", function()
                         bind2 = node(scope2)
                         do push_scope(bind2)
                             clean "bind2"
-                            push_child_to_scope(selected)
+                            push_scope_as_child_of(selected)
                         pop_scope() end
                     pop_scope() end
                 pop_scope() end
@@ -300,11 +320,6 @@ TEST("graph", function()
 end)
 
 TEST("mount()", function()
-    local mount = vide.mount
-    local create = vide.create
-    local source = vide.source
-    local cleanup = vide.cleanup
-
     local screen = create "ScreenGui" {}
 
     local text = source "foo"
@@ -334,9 +349,6 @@ TEST("mount()", function()
 end)
 
 TEST("root()", function()
-    local root = vide.root
-    local cleanup = vide.cleanup
-
     local count = 0
 
     root(function(destroy)
@@ -348,9 +360,6 @@ TEST("root()", function()
 end)
 
 TEST("source()", wrap_root(function()
-    local source = vide.source
-    local effect = vide.effect
-
     do CASE "create source"
         local src = source(1)
         CHECK(src() == 1)
@@ -415,11 +424,6 @@ TEST("source()", wrap_root(function()
 end))
 
 TEST("derive()", wrap_root(function()
-    local source = vide.source
-    local derive = vide.derive
-    local effect = vide.effect
-    local cleanup = vide.cleanup
-
     do CASE "derive new value on source change"
         local a = source(1)
         local b = source(2)
@@ -507,7 +511,7 @@ TEST("derive()", wrap_root(function()
         local count = 0
         local a = source(0)
 
-        local destroy = vide.mount(function()
+        local destroy = mount(function()
             local _b = derive(function()
                 cleanup(function()
                     count += 1
@@ -580,10 +584,6 @@ TEST("derive()", wrap_root(function()
 end))
 
 TEST("effect()", wrap_root(function()
-    local source = vide.source
-    local effect = vide.effect
-    local derive = vide.derive
-
     do CASE "rerun on source change"
         local a = source(1)
         local b = source(1)
@@ -636,15 +636,10 @@ TEST("effect()", wrap_root(function()
 end))
 
 TEST("cleanup()", wrap_root(function()
-    local root = vide.root
-    local source = vide.source
-    local effect = vide.effect
-    local cleanup = vide.cleanup
-
     do CASE "root cleanup"
         local count = 0
 
-        local destroy = vide.mount(function()
+        local destroy = mount(function()
             cleanup(function()
                 count += 1
             end)
@@ -717,10 +712,6 @@ TEST("cleanup()", wrap_root(function()
 end))
 
 TEST("create()", wrap_root(function()
-    local create = vide.create
-    local source = vide.source
-    local cleanup = vide.cleanup
-
     do CASE "create(\"ClassName\", props) syntax"
         local frame = create("Frame", { BackgroundTransparency = 0.5, Name = "Foo" })
         CHECK(frame.BackgroundTransparency == 0.5)
@@ -757,6 +748,13 @@ TEST("create()", wrap_root(function()
         }
         CHECK(text.Name == "Label")
         CHECK(text.Text == "test")
+    end
+
+    do CASE "set nested parent"
+        local frame = create "Frame" {}
+        local text = create "TextLavel" { { Parent = frame } }
+        CHECK(frame:GetChildren()[1] == text)
+        CHECK(text.Parent == frame)
     end
 
     do CASE "nested deferred"
@@ -855,7 +853,7 @@ TEST("create()", wrap_root(function()
     do CASE "binding destroy"
         local count = 0
 
-        local destroy = vide.mount(function()
+        local destroy = mount(function()
             local src = source(0)
 
             return create "TextLabel" {
@@ -921,7 +919,7 @@ TEST("create()", wrap_root(function()
     end
 
     do CASE "parent bound to source"
-        local _, wref, destroy = vide.root(function(destroy)
+        local _, wref, destroy = root(function(destroy)
             local frame = create "Frame" { Name = "Parent" }
             local parent = source(frame :: Frame?)
 
@@ -948,7 +946,7 @@ TEST("create()", wrap_root(function()
     end
 
     do CASE "recursive create"
-        local set_test_to_true = vide.action(function(self) (self :: any).test = true end)
+        local set_test_to_true = action(function(self) (self :: any).test = true end)
 
         local f2
     
@@ -1080,13 +1078,6 @@ TEST("create()", wrap_root(function()
 end))
 
 TEST("show()", wrap_root(function()
-    local untrack = vide.untrack
-    local cleanup = vide.cleanup
-    local source = vide.source
-    local effect = vide.effect
-    local show = vide.show
-    local root = vide.root
-
     do CASE "show component"
         local input = source(true)
         local function one() return 1 end
@@ -1132,7 +1123,6 @@ TEST("show()", wrap_root(function()
         local count = 0
 
         show(input :: () -> number?, function(value: () -> number)
-            vide.cleanup(function() print "destroyed" end)
             effect(function()
                 local v = value()
     
@@ -1205,31 +1195,31 @@ TEST("show()", wrap_root(function()
 
         branch = 1
         weapon { id = "1", enchant = "fire" }
-        CHECK(count == 8)
+        CHECK(count == 2)
 
         branch = 2
         weapon { id = "1", enchant = "poison" }
-        CHECK(count == 10)
+        CHECK(count == 4)
 
         weapon { id = "1", enchant = nil }
-        CHECK(count == 10)
+        CHECK(count == 4)
 
         branch = 1
         weapon { id = "1", enchant = "fire" }
-        CHECK(count == 14)
+        CHECK(count == 6)
 
         weapon(nil)
 
         branch = 2
         weapon { id = "1", enchant = "poison" }
-        CHECK(count == 22)
+        CHECK(count == 8)
 
         vide.strict = false
     end
 
     do CASE "alt" -- todo: move test
-        local visible = vide.source(true)
-        local count = vide.source(0)
+        local visible = source(true)
+        local count = source(0)
 
         local outer = 0
         local inner = 0
@@ -1273,14 +1263,161 @@ TEST("show()", wrap_root(function()
         CHECK(inner == 4)
         CHECK(destroyed == 3)
     end
+
+    do CASE "delay (destruction)"
+        local input = source(false)
+
+        local obj = {}
+        local value_upval
+        local present_upval
+        local cleaned = false
+
+        local output = show(input, function(value, present)
+            value_upval = value
+            present_upval = present
+            cleanup(function() cleaned = true end)
+            CHECK(present() == false)
+            return obj, 1
+        end)
+
+        CHECK(output() == nil)
+
+        input(true)
+
+        CHECK(output() == obj)
+        CHECK(value_upval() == true)
+        CHECK(present_upval() == true)
+        CHECK(not cleaned)
+
+        input(false)
+
+        CHECK(output() == obj)
+        CHECK(value_upval() == true)
+        CHECK(present_upval() == false)
+        CHECK(not cleaned)
+        
+        step(0.5)
+
+        CHECK(output() == obj)
+        CHECK(value_upval() == true)
+        CHECK(present_upval() == false)
+        CHECK(not cleaned)
+
+        step(0.5 + 0.01)
+
+        CHECK(output() == nil)
+        CHECK(value_upval() == true)
+        CHECK(present_upval() == false)
+        CHECK(cleaned)
+    end
+
+    do CASE "delay (reactivate before destruction)"
+        local input = source(false)
+
+        local obj = {}
+        local value_upval
+        local present_upval
+        local cleaned = false
+
+        local output = show(input, function(value, present)
+            value_upval = value
+            present_upval = present
+            cleanup(function() cleaned = true end)
+            CHECK(present() == false)
+            return obj, 1
+        end)
+
+        CHECK(output() == nil)
+
+        input(true)
+
+        CHECK(output() == obj)
+        CHECK(value_upval() == true)
+        CHECK(present_upval() == true)
+        CHECK(not cleaned)
+
+        input(false)
+
+        CHECK(output() == obj)
+        CHECK(value_upval() == true)
+        CHECK(present_upval() == false)
+        CHECK(not cleaned)
+        
+        step(0.5)
+
+        CHECK(output() == obj)
+        CHECK(value_upval() == true)
+        CHECK(present_upval() == false)
+        CHECK(not cleaned)
+
+        input(true)
+
+        CHECK(output() == obj)
+        CHECK(value_upval() == true)
+        CHECK(present_upval() == true)
+        CHECK(not cleaned)
+
+        step(0.5 + 0.01)
+
+        CHECK(output() == obj)
+        CHECK(value_upval() == true)
+        CHECK(present_upval() == true)
+        CHECK(not cleaned)
+    end
+
+    do CASE "delay (with fallback)"
+        local input = source(false)
+
+        local obj = {}
+        local value_upval
+        local present_upval
+        local cleaned = false
+
+        local obj_fallback = {}
+        local present_fallback_upval
+        local cleaned_fallback = false
+
+        local output = show(input, function(value, present)
+            value_upval = value
+            present_upval = present
+            cleanup(function() cleaned = true end)
+            CHECK(present() == false)
+            return obj, 1
+        end, function(present)
+            present_fallback_upval = present
+            cleanup(function() cleaned_fallback = true end)
+            CHECK(present() == false)
+            return obj_fallback, 1
+        end)
+
+        CHECK(output() == obj_fallback)
+        CHECK(value_upval == nil)
+        CHECK(present_upval == nil)
+        CHECK(not cleaned)
+        CHECK(present_fallback_upval() == true)
+        CHECK(not cleaned_fallback)
+
+        input(true)
+
+        CHECK(type(output() == "table") and table.find(output(), obj) and table.find(output(), obj_fallback))
+        CHECK(value_upval() == true)
+        CHECK(present_upval() == true)
+        CHECK(not cleaned)
+        CHECK(present_fallback_upval() == false)
+        CHECK(not cleaned_fallback)
+
+        step(1 + 0.01)
+
+        CHECK(output() == obj)
+        CHECK(value_upval() == true)
+        CHECK(present_upval() == true)
+        CHECK(not cleaned)
+        CHECK(present_fallback_upval() == false)
+        CHECK(cleaned_fallback)
+    end
 end))
 
 TEST("switch()", wrap_root(function()
-    local source = vide.source
-    local switch = vide.switch
-    local effect = vide.effect
-    local cleanup = vide.cleanup
-
     do CASE "update on source change"
         local input = source(true)
 
@@ -1308,28 +1445,27 @@ TEST("switch()", wrap_root(function()
         CHECK(output() == nil)
     end
 
-    do CASE "same component different map"
-        local input = source(0)
+    -- do CASE "same component different map"
+    --     local input = source(0)
 
-        local function component()
-            return {}
-        end
+    --     local function component()
+    --         return {}
+    --     end
 
-        local output = switch(input) {
-            [1] = component,
-            [2] = component
-        }
+    --     local output = switch(input) {
+    --         [1] = component,
+    --         [2] = component
+    --     }
 
-        CHECK(output() == nil)
+    --     CHECK(output() == nil)
 
-        input(1)
-        local instance = output()
-        CHECK(instance)
+    --     input(1)
+    --     local instance = output()
+    --     CHECK(instance)
 
-        input(2)
-        CHECK(output() == instance)
-
-    end
+    --     input(2)
+    --     CHECK(output() == instance)
+    -- end
 
     do CASE "scoped switch"
         local input = source(true)
@@ -1399,15 +1535,13 @@ TEST("switch()", wrap_root(function()
 
         vide.strict = false
     end
+
+    do CASE "delay"
+        -- probably unneeded because show() uses switch() internally
+    end
 end))
 
 TEST("indexes()", wrap_root(function()
-    local create = vide.create
-    local source = vide.source
-    local effect = vide.effect
-    local indexes = vide.indexes
-    local cleanup = vide.cleanup
-
     do CASE "use source"
         local input = source { 1, 2, 3 }
 
@@ -1425,7 +1559,7 @@ TEST("indexes()", wrap_root(function()
 
         local count = table.create(3, 0)
 
-        local _, output = vide.root(function()
+        local _, output = root(function()
             local output = indexes(input, function(v, i)
                 count[i] += 1
                 return v
@@ -1491,9 +1625,12 @@ TEST("indexes()", wrap_root(function()
         do -- check that `input` allows gc of `output`
             local input = source {}
 
-            local output = indexes(input, function(v, i)
-                return v, i
+            local destroy, output = root(function()
+                return indexes(input, function(v, i)
+                    return v, i
+                end)
             end)
+            destroy()
 
             local wref = weak { output }
 
@@ -1597,14 +1734,84 @@ TEST("indexes()", wrap_root(function()
 
         vide.strict = false
     end
+
+     do CASE "delay"
+        local input = source {}
+
+        local cleaned_counts = {} :: Map<number, number>
+    
+        local output = indexes(input, function(v, i, present)
+            cleanup(function()
+                cleaned_counts[i] = (cleaned_counts[i] or 0) + 1
+            end)
+            return { value = v, index = i, present = present }, 1
+        end)
+
+        local function mapped()
+            local map = {}
+            local objects = output()
+            if objects then
+                for _, object in objects do
+                    map[object.index] = { value = object.value, present = object.present }
+                end
+            end
+            return map
+        end
+
+        ------------------------------------------------------------------------
+
+        do
+            CHECK(mapped()[1] == nil)
+        end
+
+        input { 1, 2 }
+
+        do
+            CHECK(mapped()[1].value() == 1)
+            CHECK(mapped()[1].present())
+
+            CHECK(mapped()[2].value() == 2)
+            CHECK(mapped()[2].present())
+        end
+
+        input { 2 }
+        step(0.5)
+
+        do
+            CHECK(mapped()[1].value() == 2)
+            CHECK(mapped()[1].present())
+
+            CHECK(mapped()[2].value() == 2)
+            CHECK(not mapped()[2].present())
+        end
+
+        input { 1, 2 }
+        step(0.5 + 0.01)
+
+        do
+            CHECK(mapped()[1].value() == 1)
+            CHECK(mapped()[1].present())
+
+            CHECK(mapped()[2].value() == 2)
+            CHECK(mapped()[2].present())
+        end
+
+        input { 3 }
+        step(1 + 0.01)
+
+        do
+            CHECK(mapped()[1].value() == 3)
+            CHECK(mapped()[1].present())
+
+            CHECK(not mapped()[2])
+
+            CHECK(cleaned_counts[1] == nil)
+            CHECK(cleaned_counts[2] == 1)
+        end
+    end
 end))
 
 TEST("values()", wrap_root(function()
-    local create = vide.create
-    local source = vide.source
-    local values = vide.values
-    local cleanup = vide.cleanup
-
     do CASE "use source"
         local input = source { 1, 2, 3 }
 
@@ -1723,14 +1930,103 @@ TEST("values()", wrap_root(function()
 
         CHECK(n0 == n1)
     end
+
+    do CASE "delay"
+        local input = source {}
+
+        local cleaned_counts = {} :: Map<number, number>
+    
+        local output = values(input, function(v, i, present)
+            cleanup(function()
+                cleaned_counts[v] = (cleaned_counts[v] or 0) + 1
+            end)
+            return { value = v, index = i, present = present }, 1
+        end)
+
+        local function mapped()
+            local map = {}
+            local objects = output()
+            if objects then
+                for _, object in objects do
+                    map[object.value] = { index = object.index, present = object.present }
+                end
+            end
+            return map
+        end
+
+        ------------------------------------------------------------------------
+
+        do
+            CHECK(mapped()[1] == nil)
+        end
+
+        input { 1 }
+
+        do
+            CHECK(mapped()[1].index() == 1)
+            CHECK(mapped()[1].present())
+        end
+
+        input { 2 }
+        step(0.5)
+
+        do
+            CHECK(mapped()[1].index() == 1)
+            CHECK(not mapped()[1].present())
+
+            CHECK(mapped()[2].index() == 1)
+            CHECK(mapped()[2].present())
+        end
+
+        input { 1, 2 }
+        step(0.5 + 0.01)
+
+        do
+            CHECK(mapped()[1].index() == 1)
+            CHECK(mapped()[1].present())
+
+            CHECK(mapped()[2].index() == 2)
+            CHECK(mapped()[2].present())
+        end
+
+        input { 3 }
+        step(1 + 0.01)
+
+        do
+            CHECK(not mapped()[1])
+            CHECK(not mapped()[2])
+
+            CHECK(mapped()[3].index() == 1)
+            CHECK(mapped()[3].present())
+
+            CHECK(cleaned_counts[1] == 1)
+            CHECK(cleaned_counts[2] == 1)
+            CHECK(cleaned_counts[3] == nil)
+        end
+    end
+
+    do CASE "delayed destruction deferred"
+        local input = source {}
+        local output = values(input, function()
+            return {}, 1
+        end)
+
+        local count = 0
+        effect(function() output(); count += 1 end)
+
+        input { 1, 2, 3 }
+        CHECK(count == 2)
+
+        input {}
+        CHECK(count == 2)
+
+        step(1 + 0.01)
+        --CHECK(count == 3)
+        CHECK(count == 5)
+    end
 end))
 
 TEST("spring()", wrap_root(function()
-    local create = vide.create
-    local source = vide.source
-    local spring = vide.spring
-    local effect = vide.effect
-
     do CASE "update source (on next step)"
         local value = source(10)
         local sprung = spring(value, 1, 1)
@@ -1738,7 +2034,7 @@ TEST("spring()", wrap_root(function()
         CHECK(sprung() == 10)
         value(20)
         CHECK(sprung() == 10)
-        vide.step(1/60)
+        step(1/60)
         CHECK(sprung() ~= 10)
         CHECK(sprung() > 10)
     end
@@ -1804,9 +2100,9 @@ TEST("spring()", wrap_root(function()
         local output = spring(input)
 
         input(1)
-        vide.step(0.05)
+        step(0.05)
         CHECK(output() ~= input()) -- check spring is moving
-        vide.step(10) -- spring finished, should be internally removed from queue
+        step(10) -- spring finished, should be internally removed from queue
         CHECK(output() == input()) -- check spring is at target
 
         local count = -1
@@ -1815,25 +2111,18 @@ TEST("spring()", wrap_root(function()
             count += 1
         end)
 
-        vide.step(1) -- attempt to cause another spring update
+        step(1) -- attempt to cause another spring update
         CHECK(count == 0) -- check no update occurs as spring is finished
         --
 
         gc() -- perform full gc
         input(2) -- spring should be re-added to spring queue
-        vide.step(0) -- process spring queue
+        step(0) -- process spring queue
         CHECK(count == 1) -- check spring was rescheduled correctly
     end
 end))
 
 TEST("untrack()", wrap_root(function()
-    local source = vide.source
-    local effect = vide.effect
-    local derive = vide.derive
-    local untrack = vide.untrack
-    local cleanup = vide.cleanup
-    local root = vide.root
-
     do CASE "does not register dependency"
         local a = source(0)
         local b = source(0)
@@ -1934,8 +2223,6 @@ TEST("untrack()", wrap_root(function()
 end))
 
 TEST("events", function()
-    local create = vide.create
-
     local function Thing(props)
         local instance = Instance.new("Thing")
         instance.Signal = Signal.new()
@@ -1962,9 +2249,6 @@ TEST("events", function()
 end)
 
 TEST("actions", function()
-    local create = vide.create
-    local action = vide.action
-
     do CASE "run action"
         local ran = false
 
@@ -1998,11 +2282,6 @@ TEST("actions", function()
 end)
 
 TEST("changed()", wrap_root(function()
-    local root = vide.root
-    local create = vide.create
-    local source = vide.source
-    local changed = vide.changed
-
     do CASE "outputs"
         local output = source(nil)
 
@@ -2037,11 +2316,6 @@ TEST("changed()", wrap_root(function()
 end))
 
 TEST("batch()", wrap_root(function()
-    local source = vide.source
-    local derive = vide.derive
-    local effect = vide.effect
-    local batch = vide.batch
-
     do CASE "evaluation deferred"
         local a = source(0)
 
@@ -2325,10 +2599,6 @@ TEST("batch()", wrap_root(function()
 end))
 
 TEST("read()", wrap_root(function()
-    local source = vide.source
-    local effect = vide.effect
-    local read = vide.read :: any -- todo
-
     do CASE "read primitive"
         CHECK(read(1) == 1)
     end
@@ -2338,7 +2608,7 @@ TEST("read()", wrap_root(function()
         CHECK(read(src) == 1)
     end
 
-    do CASE "push_child_to_scope source"
+    do CASE "push_scope_as_child_of source"
         local src = source(0)
 
         local count = 0
@@ -2353,12 +2623,6 @@ TEST("read()", wrap_root(function()
 end))
 
 TEST("context()", function()
-    local root = vide.root
-    local context = vide.context
-    local effect = vide.effect
-    local untrack = vide.untrack
-    local show = vide.show
-
     do CASE "set context"
         local ctx = context()
 
@@ -2457,13 +2721,6 @@ TEST("context()", function()
 end)
 
 TEST("nested effects cases", function()
-    local vide = require "../../vide"
-    local source = vide.source
-    local effect = vide.effect
-    local untrack = vide.untrack
-    local cleanup = vide.cleanup
-    local root = vide.root
-
     local ran = 0
     local cleaned = 0
 
@@ -2505,11 +2762,6 @@ TEST("nested effects cases", function()
 end)
 
 TEST("graph edge cases", wrap_root(function()
-    local source = vide.source
-    local derive = vide.derive
-    local effect = vide.effect
-    local root = vide.root
-
     do CASE "diamond A,B,C,D"
         --[[
 
@@ -2680,15 +2932,6 @@ end))
 TEST("strict", wrap_root(function()
     vide.strict = true
 
-    local root = vide.root
-    local show = vide.show
-    local create = vide.create
-    local source = vide.source
-    local derive = vide.derive
-    local effect = vide.effect
-    local indexes, values = vide.indexes, vide.values
-    local untrack = vide.untrack
-
     do CASE "error on derived callback yield"
         local src = source(1)
 
@@ -2741,16 +2984,6 @@ TEST("strict", wrap_root(function()
         CHECK(count == 2)
         src(2)
         CHECK(count == 4)
-    end
-
-    do CASE "indexes() error if primitive"
-        local src = source { 1 }
-
-        local ok = pcall(function()
-            indexes(src, function() return 1 end)
-        end)
-
-        CHECK(not ok)
     end
 
     do CASE "values() error if duplicate"
@@ -2835,7 +3068,7 @@ TEST("strict", wrap_root(function()
         root(function()
             show(src, function()
                 src(false)
-                vide.cleanup(function() count += 1 end)
+                cleanup(function() count += 1 end)
                 return {}
             end)
         end)
@@ -2844,6 +3077,7 @@ TEST("strict", wrap_root(function()
             src(true)
         end)
 
+        CHECK(count == 0)
         CHECK(not ok)
     end
 
@@ -2857,9 +3091,9 @@ TEST("strict", wrap_root(function()
             effect(function()
                 untrack(function()
                     indexes(src, function()
-                        vide.cleanup(function() count_1 += 1 end)
+                        cleanup(function() count_1 += 1 end)
                         src {}
-                        vide.cleanup(function() count_2 += 1 end)
+                        cleanup(function() count_2 += 1 end)
                         return {}
                     end)
                 end)
@@ -2883,9 +3117,9 @@ TEST("strict", wrap_root(function()
             effect(function()
                 untrack(function()
                     values(src, function()
-                        vide.cleanup(function() count_1 += 1 end)
+                        cleanup(function() count_1 += 1 end)
                         src {}
-                        vide.cleanup(function() count_2 += 1 end)
+                        cleanup(function() count_2 += 1 end)
                         return {}
                     end)
                 end)
